@@ -1,0 +1,76 @@
+═══════════════════════════════════════════════════════════════
+  BRSConnect - Quick Test Accounts Reference
+═══════════════════════════════════════════════════════════════
+
+┌─────────────────────────────────────────────────────────────┐
+│ 1. SUPER ADMIN (Tarun Kumar)                                 │
+├─────────────────────────────────────────────────────────────┤
+│ Email:    tarun.kumar.751@example.com                       │
+│ Mobile:   +91 9435925400                                    │
+│ Username: super, superadmin, tarun, tarunkum766            │
+│ Password: Admin123                                          │
+│                                                             │
+│ Access: Full system access, all assemblies                  │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│ 2. LOCAL ADMIN (Priya Babu)                                  │
+├─────────────────────────────────────────────────────────────┤
+│ Email:    priya.babu.146@example.com                        │
+│ Mobile:   +91 1045923730                                    │
+│ Username: local, localadmin, priya, priyabab627            │
+│ Password: LocalAdmin@123                                    │
+│                                                             │
+│ Access: Bodhan assembly segment only                        │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│ 3. MEMBER (Priya Kumar)                                      │
+├─────────────────────────────────────────────────────────────┤
+│ Email:    priya.kumar.837@example.com                       │
+│ Mobile:   +91 0638699899                                    │
+│ Username: member, priya, priyakum32                        │
+│ Password: Member@123                                       │
+│                                                             │
+│ Access: Basic member features, Kothagudem area             │
+└─────────────────────────────────────────────────────────────┘
+
+═══════════════════════════════════════════════════════════════
+  LOGIN TIPS
+═══════════════════════════════════════════════════════════════
+• You can login using Email, Mobile, or Username
+• All passwords are case-sensitive
+• Use any identifier from the credentials list above
+• Switch accounts via Settings → Logout
+
+═══════════════════════════════════════════════════════════════
+  TESTING CHECKLIST
+═══════════════════════════════════════════════════════════════
+
+Super Admin:
+  ☐ View all assemblies in dashboard
+  ☐ Manage all users (SuperAdmin, LocalAdmin, Members)
+  ☐ Create polls for any segment
+  ☐ Send alerts to all segments
+  ☐ Approve/reject membership requests
+  ☐ View reports from all segments
+
+Local Admin:
+  ☐ View dashboard for assigned segment only
+  ☐ Manage users in assigned segment
+  ☐ Create polls for assigned segment
+  ☐ Send messages to segment admins
+  ☐ Approve membership for assigned segment
+  ☐ View reports from assigned segment
+
+Member:
+  ☐ View posts and feeds
+  ☐ Create suggestions
+  ☐ Vote on polls
+  ☐ Report fake news
+  ☐ Submit reports/issues
+  ☐ View alerts from admins
+  ☐ Verify cannot access admin features
+
+═══════════════════════════════════════════════════════════════
+

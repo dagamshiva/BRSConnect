@@ -1,0 +1,158 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SuperAdmin
+  LocalAdmin
+  Member
+  Pending
+}
+
+enum ApprovalStatus {
+  Pending
+  Approved
+  Rejected
+}
+
+model User {
+  id              String            @id @default(cuid())
+  name            String
+  email           String?           @unique
+  mobile          String?           @unique
+  passwordHash    String?
+  role            Role              @default(Pending)
+  status          ApprovalStatus    @default(Pending)
+  assemblySegment String
+  village         String?
+  ward            String?
+  booth           String?
+  address         String?
+  approvedById    String?
+  approvedBy      User?             @relation("UserApproval", fields: [approvedById], references: [id])
+  approvalsGiven  User[]            @relation("UserApproval")
+  approvedAt      DateTime?
+  rejectionReason String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  approvalLogsInitiated UserApprovalLog[] @relation("ApprovalActor")
+  approvalLogsReceived  UserApprovalLog[] @relation("ApprovalTarget")
+  polls           Poll[]            @relation("PollCreator")
+  posts           Post[]
+  reports         Report[]          @relation("ReportReporter")
+  assignedReports Report[]          @relation("ReportAssignee")
+  highlightedSegments HighlightedSegment[] @relation("SegmentCreator")
+  pollVotes       PollVote[]
+}
+
+model UserApprovalLog {
+  id        String   @id @default(cuid())
+  action    String
+  reason    String?
+  actorId   String
+  actor     User     @relation("ApprovalActor", fields: [actorId], references: [id])
+  userId    String
+  user      User     @relation("ApprovalTarget", fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+model HighlightedSegment {
+  id           String   @id @default(cuid())
+  segmentId    String   @unique
+  segmentName  String
+  candidate    String
+  winCount     Int
+  loseCount    Int
+  cantSayCount Int
+  sampleSize   Int
+  source       String
+  lastUpdated  DateTime
+  createdById  String
+  createdBy    User     @relation("SegmentCreator", fields: [createdById], references: [id])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Poll {
+  id             String      @id @default(cuid())
+  title          String
+  description    String?
+  type           String
+  visibility     String
+  assemblyScope  String
+  villageScope   String?
+  wardScope      String?
+  boothScope     String?
+  startsAt       DateTime
+  endsAt         DateTime
+  createdById    String
+  createdBy      User        @relation("PollCreator", fields: [createdById], references: [id])
+  totalResponses Int         @default(0)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  options        PollOption[]
+  votes          PollVote[]
+}
+
+model PollOption {
+  id     String  @id @default(cuid())
+  label  String
+  pollId String
+  poll   Poll    @relation(fields: [pollId], references: [id])
+  votes  PollVote[]
+}
+
+model PollVote {
+  id        String   @id @default(cuid())
+  pollId    String
+  poll      Poll     @relation(fields: [pollId], references: [id])
+  optionId  String
+  option    PollOption @relation(fields: [optionId], references: [id])
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@unique([pollId, userId])
+}
+
+model Post {
+  id             String   @id @default(cuid())
+  authorId       String
+  author         User     @relation(fields: [authorId], references: [id])
+  content        String
+  mediaType      String?
+  mediaUrl       String?
+  assemblyScope  String
+  villageScope   String?
+  wardScope      String?
+  boothScope     String?
+  trendingScore  Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model Report {
+  id             String   @id @default(cuid())
+  reporterId     String
+  reporter       User     @relation("ReportReporter", fields: [reporterId], references: [id])
+  assigneeId     String?
+  assignee       User?    @relation("ReportAssignee", fields: [assigneeId], references: [id])
+  title          String
+  description    String
+  attachments    String[]
+  status         String   @default("New")
+  assemblyScope  String
+  villageScope   String?
+  wardScope      String?
+  boothScope     String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
