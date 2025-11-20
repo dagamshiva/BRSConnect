@@ -18,6 +18,7 @@ import { colors } from "../../theme/colors";
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
 import { clearError, login, selectAuth } from "../../store/slices/authSlice";
 import { isValidMobile } from "./utils";
+import { BRSLogo } from "../../components/BRSLogo";
 
 const initialLoginState = {
   identifier: "",
@@ -73,9 +74,7 @@ export const LoginScreen = (): JSX.Element => {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.logoWrapper}>
-          <View style={styles.iconWrapper}>
-            <MaterialIcons name="directions-car" size={56} color={colors.primary} />
-          </View>
+          <BRSLogo size={120} showText={false} variant="icon" />
           <Text style={styles.title}>BRSConnect</Text>
           <Text style={styles.subtitle}>Powering the Pink Car movement…</Text>
         </View>
@@ -186,17 +185,6 @@ const styles = StyleSheet.create({
   logoWrapper: {
     alignItems: "center",
     marginBottom: 24,
-  },
-  iconWrapper: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: colors.surface,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 16,
-    borderWidth: 2,
-    borderColor: colors.primary,
   },
   title: {
     fontSize: 28,

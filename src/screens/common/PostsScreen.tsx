@@ -20,6 +20,7 @@ import { colors } from '../../theme/colors';
 import { useAppSelector } from '../../store/hooks';
 import { selectAuth } from '../../store/slices/authSlice';
 import { YouTubePlayer } from '../../components/embeds/YouTubePlayer';
+import { TweetEmbed } from '../../components/embeds/TweetEmbed';
 import { useLocalPolls } from '../../context/LocalPollsContext';
 import { AssemblySelector } from '../../components/AssemblySelector';
 import { mockFeed } from '../../../mocks/mock_feed';
@@ -37,6 +38,7 @@ import {
 } from '../../data/commonData';
 
 type Scope = 'assembly' | 'trending';
+type SortMode = 'latest' | 'mostLiked';
 
 interface FeedItem {
   id: string;
@@ -47,6 +49,7 @@ interface FeedItem {
   media: string;
   videoId?: string; // YouTube video ID for video posts
   videoUrl?: string;
+  videoPlatform?: 'YouTube' | 'Twitter' | 'Instagram';
   likes: number;
   dislikes: number;
   comments: number;
@@ -75,7 +78,63 @@ const buildSummary = (item: MockFeedItem): string => {
   return `${prefix} ${segment}${village}.`;
 };
 
-const pickThumbnail = (type: MockFeedItem['type']): string => {
+// Helper function to get YouTube thumbnail URL
+const getYouTubeThumbnail = (videoId: string): string => {
+  // Try maxresdefault first (highest quality), fallback to hqdefault
+  return `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
+};
+
+// Helper function to get Twitter media preview URL
+// Note: In production, you'd fetch from Twitter's oEmbed API or use a backend service
+const getTwitterMediaUrl = (url: string): string | null => {
+  // Twitter oEmbed endpoint (public, no auth required for basic preview)
+  // Format: https://publish.twitter.com/oembed?url={tweet_url}
+  // This returns JSON with thumbnail, but requires async fetch
+  // For now, we'll use a service that provides direct image URLs
+  // You can use services like linkpreview.net, opengraph.io, or implement backend fetching
+  
+  // For immediate display, we can try constructing a preview URL
+  // Some services provide direct image URLs, but they require API keys
+  // Returning null will use fallback thumbnail
+  return null;
+};
+
+// Helper function to get Instagram media preview URL
+// Note: Instagram requires authentication for their API
+// In production, use Instagram Basic Display API or a backend service
+const getInstagramMediaUrl = (url: string): string | null => {
+  // Instagram oEmbed endpoint: https://api.instagram.com/oembed?url={post_url}
+  // This also requires async fetch and may have CORS restrictions
+  // For production, implement this via your backend
+  return null;
+};
+
+const pickThumbnail = (
+  type: MockFeedItem['type'],
+  videoId?: string,
+  videoUrl?: string,
+  videoPlatform?: 'YouTube' | 'Twitter' | 'Instagram',
+): string => {
+  // If it's a YouTube video with videoId, use actual YouTube thumbnail
+  if (videoPlatform === 'YouTube' && videoId) {
+    return getYouTubeThumbnail(videoId);
+  }
+  
+  // For Twitter: Don't set a thumbnail - we show TweetEmbed directly
+  // The media field won't be used for Twitter posts
+  if (videoPlatform === 'Twitter') {
+    // Return a placeholder that won't be displayed (TweetEmbed is shown instead)
+    return randomElement(IMAGE_THUMBNAILS);
+  }
+  
+  // For Instagram: Use a fallback thumbnail instead of Instagram's media endpoint
+  // Instagram's /media/ endpoint requires authentication and doesn't work
+  // The thumbnail will be shown, and clicking opens Instagram in browser/app
+  if (videoPlatform === 'Instagram') {
+    return randomElement(VIDEO_THUMBNAILS);
+  }
+  
+  // Fallback to random thumbnails
   switch (type) {
     case 'VIDEO':
       return randomElement(VIDEO_THUMBNAILS);
@@ -88,15 +147,49 @@ const pickThumbnail = (type: MockFeedItem['type']): string => {
 
 const seedFeeds: FeedItem[] = mockFeed.slice(0, 300).map(item => {
   const category = TYPE_TO_CATEGORY_MAP[item.type] ?? 'News';
+  
+  // Extract YouTube video ID if it's a YouTube URL
+  let videoId: string | undefined = undefined;
+  if (item.mediaUrl) {
+    const youtubeRegex =
+      /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
+    const match = item.mediaUrl.match(youtubeRegex);
+    if (match && match[1]) {
+      videoId = match[1];
+    }
+  }
+  
+  // Get videoPlatform from item if it exists (for new items), otherwise detect from URL
+  // Check for videoPlatform and mediaUrl regardless of item type (NEWS can have Twitter/YouTube URLs)
+  let videoPlatform: 'YouTube' | 'Twitter' | 'Instagram' | undefined = undefined;
+  if ((item as any).videoPlatform) {
+    videoPlatform = (item as any).videoPlatform;
+  } else if (item.mediaUrl) {
+    // Auto-detect platform from URL
+    if (/youtube\.com|youtu\.be/i.test(item.mediaUrl)) {
+      videoPlatform = 'YouTube';
+    } else if (/(?:twitter\.com|x\.com)\/\w+\/status\//i.test(item.mediaUrl) || /t\.co\/\w+/i.test(item.mediaUrl)) {
+      videoPlatform = 'Twitter';
+    } else if (/instagram\.com\/(?:p|reel|tv|reels)\//i.test(item.mediaUrl)) {
+      videoPlatform = 'Instagram';
+    }
+  }
+  
+  // If mediaUrl contains a social media URL, treat it as videoUrl
+  // This handles NEWS items with Twitter/YouTube/Instagram URLs
+  const hasSocialMediaUrl = videoPlatform !== undefined && item.mediaUrl;
+  const videoUrl = hasSocialMediaUrl ? item.mediaUrl : (item.type === 'VIDEO' ? item.mediaUrl : undefined);
+  
   return {
     id: item.id,
     scope: 'assembly',
     category,
     title: item.title,
     summary: buildSummary(item),
-    media: pickThumbnail(item.type),
-    videoId: undefined,
-    videoUrl: item.type === 'VIDEO' ? item.mediaUrl : undefined,
+    media: pickThumbnail(item.type, videoId, videoUrl, videoPlatform),
+    videoId,
+    videoUrl,
+    videoPlatform,
     likes: item.likes ?? randomInt(120, 1900),
     dislikes: item.dislikes ?? randomInt(5, 240),
     comments: randomInt(10, 120),
@@ -136,14 +229,144 @@ const convertLegacyFeed = (item: LegacyFeedItem): FeedItem => {
       ? item.summary
       : `Update shared by ${item.aliasName}`;
 
+  // Detect video platform from URL if available
+  let videoPlatform: 'YouTube' | 'Twitter' | 'Instagram' | undefined = undefined;
+  if (isVideo && (videoUrl || item.videoUrl)) {
+    const url = videoUrl || item.videoUrl || '';
+    if (/youtube\.com|youtu\.be/i.test(url)) {
+      videoPlatform = 'YouTube';
+    } else if (/(?:twitter\.com|x\.com)\/\w+\/status\//i.test(url) || /t\.co\/\w+/i.test(url)) {
+      videoPlatform = 'Twitter';
+    } else if (/instagram\.com\/(?:p|reel|tv)\//i.test(url)) {
+      videoPlatform = 'Instagram';
+    }
+  }
+
   return {
     ...item,
     scope: 'assembly',
     summary: summaryText,
     media: fallbackMedia,
     videoUrl: isVideo ? videoUrl ?? item.media : undefined,
+    videoPlatform,
     assemblySegment: item.assemblySegment,
   };
+};
+
+// Helper function to extract Twitter URL from feed item
+const extractTwitterUrl = (item: FeedItem): string | null => {
+  // If videoPlatform is explicitly Twitter, return videoUrl directly
+  if (item.videoPlatform === 'Twitter' && item.videoUrl) {
+    return item.videoUrl;
+  }
+  
+  // Check videoUrl first (for Videos category and News with social media URLs)
+  if (item.videoUrl) {
+    const twitterMatch = item.videoUrl.match(/(?:https?:\/\/)?(?:www\.)?(?:twitter\.com|x\.com)\/\w+\/status\/\d+/i);
+    if (twitterMatch) {
+      return twitterMatch[0].startsWith('http') ? twitterMatch[0] : `https://${twitterMatch[0]}`;
+    }
+  }
+  
+  // Check summary for Twitter URLs (for News category)
+  if (item.summary) {
+    const twitterMatch = item.summary.match(/(?:https?:\/\/)?(?:www\.)?(?:twitter\.com|x\.com)\/\w+\/status\/\d+/i);
+    if (twitterMatch) {
+      return twitterMatch[0].startsWith('http') ? twitterMatch[0] : `https://${twitterMatch[0]}`;
+    }
+  }
+  
+  // Also check media field in case URL is stored there
+  if (item.media && typeof item.media === 'string') {
+    const twitterMatch = item.media.match(/(?:https?:\/\/)?(?:www\.)?(?:twitter\.com|x\.com)\/\w+\/status\/\d+/i);
+    if (twitterMatch) {
+      return twitterMatch[0].startsWith('http') ? twitterMatch[0] : `https://${twitterMatch[0]}`;
+    }
+  }
+  
+  return null;
+};
+
+// Helper function to extract YouTube URL from feed item
+const extractYouTubeUrl = (item: FeedItem): string | null => {
+  if (item.videoId) {
+    return `https://www.youtube.com/watch?v=${item.videoId}`;
+  }
+  
+  if (item.videoUrl) {
+    const youtubeMatch = item.videoUrl.match(/(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/i);
+    if (youtubeMatch) {
+      return youtubeMatch[0].startsWith('http') ? youtubeMatch[0] : `https://${youtubeMatch[0]}`;
+    }
+  }
+  
+  if (item.summary) {
+    const youtubeMatch = item.summary.match(/(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/i);
+    if (youtubeMatch) {
+      return youtubeMatch[0].startsWith('http') ? youtubeMatch[0] : `https://${youtubeMatch[0]}`;
+    }
+  }
+  
+  return null;
+};
+
+const buildInstagramThumbnail = (url: string): string | null => {
+  const match = url.match(
+    /instagram\.com\/(?:p|reel|reels|tv)\/([^/?#]+)/i,
+  );
+  const shortcode = match?.[1];
+  if (!shortcode) {
+    return null;
+  }
+  // Fallback to /p/ path which works for standard posts
+  return `https://www.instagram.com/p/${shortcode}/media/?size=l`;
+};
+
+// Helper function to extract Instagram URL from feed item
+const extractInstagramUrl = (item: FeedItem): string | null => {
+  // If videoPlatform is explicitly Instagram, return videoUrl directly
+  if (item.videoPlatform === 'Instagram' && item.videoUrl) {
+    return item.videoUrl;
+  }
+  
+  // Check videoUrl first
+  if (item.videoUrl) {
+    const instagramMatch = item.videoUrl.match(/(?:https?:\/\/)?(?:www\.)?instagram\.com\/(?:p|reel|tv|reels)\/[a-zA-Z0-9_-]+\/?/i);
+    if (instagramMatch) {
+      return instagramMatch[0].startsWith('http') ? instagramMatch[0] : `https://${instagramMatch[0]}`;
+    }
+  }
+  
+  // Check summary for Instagram URLs
+  if (item.summary) {
+    const instagramMatch = item.summary.match(/(?:https?:\/\/)?(?:www\.)?instagram\.com\/(?:p|reel|tv|reels)\/[a-zA-Z0-9_-]+\/?/i);
+    if (instagramMatch) {
+      return instagramMatch[0].startsWith('http') ? instagramMatch[0] : `https://${instagramMatch[0]}`;
+    }
+  }
+  
+  // Also check media field in case URL is stored there
+  if (item.media && typeof item.media === 'string') {
+    const instagramMatch = item.media.match(/(?:https?:\/\/)?(?:www\.)?instagram\.com\/(?:p|reel|tv|reels)\/[a-zA-Z0-9_-]+\/?/i);
+    if (instagramMatch) {
+      return instagramMatch[0].startsWith('http') ? instagramMatch[0] : `https://${instagramMatch[0]}`;
+    }
+  }
+  
+  return null;
+};
+
+// Helper function to remove URLs from text
+const removeUrlsFromText = (text: string): string => {
+  // Remove Twitter URLs
+  text = text.replace(/(?:https?:\/\/)?(?:www\.)?(?:twitter\.com|x\.com)\/\w+\/status\/\d+/gi, '');
+  // Remove YouTube URLs
+  text = text.replace(/(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)[a-zA-Z0-9_-]+/gi, '');
+  // Remove Instagram URLs
+  text = text.replace(/(?:https?:\/\/)?(?:www\.)?instagram\.com\/(?:p|reel|tv)\/[a-zA-Z0-9_-]+\/?/gi, '');
+  // Clean up extra spaces
+  text = text.replace(/\s+/g, ' ').trim();
+  return text;
 };
 
 export const PostsScreen = (): React.ReactElement => {
@@ -161,11 +384,14 @@ export const PostsScreen = (): React.ReactElement => {
   const [selectedAssemblySegment, setSelectedAssemblySegment] = useState<
     string | null
   >(null); // Default to null (shows "All")
+  const [sortMode, setSortMode] = useState<SortMode>('latest');
 
   const [playingVideoId, setPlayingVideoId] = useState<string | null>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [selectedVideo, setSelectedVideo] = useState<{
-    videoId: string;
+    videoId?: string;
+    videoUrl?: string;
+    platform?: 'YouTube' | 'Twitter' | 'Instagram';
     title?: string;
     summary?: string;
   } | null>(null);
@@ -211,18 +437,35 @@ export const PostsScreen = (): React.ReactElement => {
       );
     }
 
-    // If filter is "All", filter by last 5 days and sort by likes
+    // Filter by category type first
     if (filter === 'All') {
+      // If filter is "All", filter by last 5 days
       const fiveDaysAgo = Date.now() - 5 * 24 * 60 * 60 * 1000;
-      pool = pool
-        .filter(item => new Date(item.createdAt).getTime() >= fiveDaysAgo)
-        .sort((a, b) => b.likes - a.likes);
+      pool = pool.filter(
+        item => new Date(item.createdAt).getTime() >= fiveDaysAgo,
+      );
     } else {
+      // Filter by specific category
       pool = pool.filter(item => item.category === filter);
     }
 
-    return pool;
-  }, [feeds, filter, scope, topTrending, selectedAssemblySegment]);
+    // Apply ordering based on sortMode
+    // If order is "latest" → order by "postedAt" (createdAt) desc
+    // If order is "mostLiked" → order by "likes" desc
+    const sortedPool = [...pool].sort((a, b) => {
+      if (sortMode === 'latest') {
+        // Order by postedAt descending (newest first)
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      } else if (sortMode === 'mostLiked') {
+        // Order by likes descending (most liked first)
+        return b.likes - a.likes;
+      }
+      // Default to latest
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+
+    return sortedPool;
+  }, [feeds, filter, scope, topTrending, selectedAssemblySegment, sortMode]);
 
   // Get polls to display when filter is "Polls"
   const displayPolls = useMemo(() => {
@@ -555,37 +798,66 @@ export const PostsScreen = (): React.ReactElement => {
       />
 
       <View style={styles.filterRow}>
-        <Text style={styles.filterLabel}>Filter:</Text>
-        <View style={styles.filterChipsContainer}>
-          <TouchableOpacity
-            style={[styles.chip, filter === 'All' && styles.chipActive]}
-            onPress={() => setFilter('All')}
-          >
-            <Text
-              style={[
-                styles.chipText,
-                filter === 'All' && styles.chipTextActive,
-              ]}
-            >
-              All
-            </Text>
-          </TouchableOpacity>
-          {CATEGORY_OPTIONS.map(option => (
+        <View style={styles.filterSection}>
+          <Text style={styles.filterLabel}>Filter:</Text>
+          <View style={styles.filterChipsContainer}>
             <TouchableOpacity
-              key={option}
-              style={[styles.chip, filter === option && styles.chipActive]}
-              onPress={() => setFilter(option)}
+              style={[styles.chip, filter === 'All' && styles.chipActive]}
+              onPress={() => setFilter('All')}
             >
               <Text
                 style={[
                   styles.chipText,
-                  filter === option && styles.chipTextActive,
+                  filter === 'All' && styles.chipTextActive,
                 ]}
               >
-                {option}
+                All
               </Text>
             </TouchableOpacity>
-          ))}
+            {CATEGORY_OPTIONS.map(option => (
+              <TouchableOpacity
+                key={option}
+                style={[styles.chip, filter === option && styles.chipActive]}
+                onPress={() => setFilter(option)}
+              >
+                <Text
+                  style={[
+                    styles.chipText,
+                    filter === option && styles.chipTextActive,
+                  ]}
+                >
+                  {option}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+        <View style={styles.filterSection}>
+          <Text style={styles.filterLabel}>Order:</Text>
+          <View style={styles.filterChipsContainer}>
+            {[
+              { label: 'Latest', value: 'latest' as SortMode },
+              { label: 'Most Liked', value: 'mostLiked' as SortMode },
+            ].map(option => (
+              <TouchableOpacity
+                key={option.value}
+                style={[
+                  styles.chip,
+                  sortMode === option.value && styles.chipActive,
+                ]}
+                onPress={() => setSortMode(option.value)}
+              >
+                <Text
+                  style={[
+                    styles.chipText,
+                    sortMode === option.value && styles.chipTextActive,
+                  ]}
+                >
+                  {option.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
         </View>
       </View>
 
@@ -764,15 +1036,164 @@ export const PostsScreen = (): React.ReactElement => {
                   }
                 />
               </View>
-              <Text style={styles.feedSummary}>{item.summary}</Text>
-              {item.media && (
-                <TouchableOpacity onPress={() => setSelectedImage(item.media)}>
-                  <Image
-                    source={{ uri: item.media }}
-                    style={styles.feedImage}
-                  />
-                </TouchableOpacity>
-              )}
+              <Text style={styles.feedSummary}>
+                {removeUrlsFromText(item.summary)}
+              </Text>
+              
+              {(() => {
+                const twitterUrl = extractTwitterUrl(item);
+                const youtubeUrl = extractYouTubeUrl(item);
+                const instagramUrl = extractInstagramUrl(item);
+                
+                // Show media first, then button below
+                if (twitterUrl) {
+                  return (
+                    <>
+                      <View style={styles.twitterEmbedContainer}>
+                        <TweetEmbed url={twitterUrl} height={400} />
+                      </View>
+                      {/* Platform button below media */}
+                      <TouchableOpacity
+                        style={[styles.platformButton, styles.twitterButton]}
+                        onPress={() => Linking.openURL(twitterUrl).catch(() => {
+                          Alert.alert('Error', 'Unable to open Twitter link.');
+                        })}
+                      >
+                        <MaterialIcons name="tag" size={20} color={colors.textPrimary} />
+                        <Text style={styles.platformButtonText}>Open on X</Text>
+                      </TouchableOpacity>
+                    </>
+                  );
+                }
+                
+                if (item.videoId || youtubeUrl) {
+                  return (
+                    <>
+                      {item.media && (
+                        <TouchableOpacity
+                          style={styles.videoThumbnail}
+                          onPress={() => {
+                            if (item.videoId) {
+                              setSelectedVideo({
+                                videoId: item.videoId,
+                                platform: 'YouTube',
+                                title: item.title,
+                                summary: item.summary,
+                              });
+                            } else if (youtubeUrl) {
+                              setSelectedVideo({
+                                videoUrl: youtubeUrl,
+                                platform: 'YouTube',
+                                title: item.title,
+                                summary: item.summary,
+                              });
+                            }
+                          }}
+                        >
+                          <Image
+                            source={{ uri: item.media }}
+                            style={styles.videoThumbnailImage}
+                          />
+                          <View style={styles.playButtonOverlay}>
+                            <MaterialIcons
+                              name="play-circle-filled"
+                              size={64}
+                              color={colors.textPrimary}
+                            />
+                          </View>
+                        </TouchableOpacity>
+                      )}
+                      {/* Platform button below media */}
+                      {youtubeUrl && (
+                        <TouchableOpacity
+                          style={[styles.platformButton, styles.youtubeButton]}
+                          onPress={() => {
+                            if (item.videoId) {
+                              setSelectedVideo({
+                                videoId: item.videoId,
+                                platform: 'YouTube',
+                                title: item.title,
+                                summary: item.summary,
+                              });
+                            } else {
+                              setSelectedVideo({
+                                videoUrl: youtubeUrl,
+                                platform: 'YouTube',
+                                title: item.title,
+                                summary: item.summary,
+                              });
+                            }
+                          }}
+                        >
+                          <MaterialIcons name="play-circle-outline" size={20} color={colors.textPrimary} />
+                          <Text style={styles.platformButtonText}>Open on YouTube</Text>
+                        </TouchableOpacity>
+                      )}
+                    </>
+                  );
+                }
+                
+                if (instagramUrl) {
+                  // Show thumbnail with play button (Instagram embeds require login)
+                  // Clicking opens Instagram in browser/app where public posts can be viewed without login
+                  // Use item.media which has a working fallback thumbnail from pickThumbnail
+                  return (
+                    <>
+                      <TouchableOpacity
+                        style={styles.videoThumbnail}
+                        onPress={() => {
+                          // Open Instagram URL directly - public posts can be viewed without login in browser/app
+                          Linking.openURL(instagramUrl).catch(() => {
+                            Alert.alert('Error', 'Unable to open Instagram link.');
+                          });
+                        }}
+                      >
+                        <Image
+                          source={{ uri: item.media }}
+                          style={styles.videoThumbnailImage}
+                        />
+                        <View style={styles.playButtonOverlay}>
+                          <MaterialIcons
+                            name="play-circle-filled"
+                            size={64}
+                            color={colors.textPrimary}
+                          />
+                        </View>
+                        <View style={styles.platformBadge}>
+                          <MaterialIcons
+                            name="photo-camera"
+                            size={14}
+                            color={colors.textPrimary}
+                          />
+                          <Text style={styles.platformBadgeText}>Instagram</Text>
+                        </View>
+                      </TouchableOpacity>
+                      {/* Platform button below media */}
+                      <TouchableOpacity
+                        style={[styles.platformButton, styles.instagramButton]}
+                        onPress={() => Linking.openURL(instagramUrl).catch(() => {
+                          Alert.alert('Error', 'Unable to open Instagram link.');
+                        })}
+                      >
+                        <MaterialIcons name="photo-camera" size={20} color={colors.textPrimary} />
+                        <Text style={styles.platformButtonText}>Open on Instagram</Text>
+                      </TouchableOpacity>
+                    </>
+                  );
+                }
+                
+                // Regular image
+                return (
+                  item.media ? (
+                    <TouchableOpacity onPress={() => setSelectedImage(item.media)}>
+                      <Image
+                        source={{ uri: item.media }}
+                        style={styles.feedImage}
+                      />
+                    </TouchableOpacity>
+                  ) : null
+                );
+              })()}
               <View style={styles.actionsRow}>
                 <TouchableOpacity
                   style={[
@@ -877,55 +1298,206 @@ export const PostsScreen = (): React.ReactElement => {
                   }
                 />
               </View>
-              <Text style={styles.feedSummary}>{item.summary}</Text>
-              {item.videoId ? (
-                <TouchableOpacity
-                  style={styles.videoThumbnail}
-                  onPress={() => {
-                    setSelectedVideo({
-                      videoId: item.videoId!,
-                      title: item.title,
-                      summary: item.summary,
-                    });
-                  }}
-                >
-                  <Image
-                    source={{ uri: item.media }}
-                    style={styles.videoThumbnailImage}
-                  />
-                  <View style={styles.playButtonOverlay}>
-                    <MaterialIcons
-                      name="play-circle-filled"
-                      size={64}
-                      color={colors.textPrimary}
+              <Text style={styles.feedSummary}>
+                {removeUrlsFromText(item.summary)}
+              </Text>
+              
+              {(() => {
+                // Check if this is a Twitter post (from any category) - show embed
+                const twitterUrl = extractTwitterUrl(item);
+                if (twitterUrl) {
+                  // Display Twitter embed for both News and Videos categories
+                  return (
+                    <>
+                      <View style={styles.twitterEmbedContainer}>
+                        <TweetEmbed url={twitterUrl} height={400} />
+                      </View>
+                      {/* Platform button below media */}
+                      <TouchableOpacity
+                        style={[styles.platformButton, styles.twitterButton]}
+                        onPress={() => Linking.openURL(twitterUrl).catch(() => {
+                          Alert.alert('Error', 'Unable to open Twitter link.');
+                        })}
+                      >
+                        <MaterialIcons name="tag" size={20} color={colors.textPrimary} />
+                        <Text style={styles.platformButtonText}>Open on X</Text>
+                      </TouchableOpacity>
+                    </>
+                  );
+                }
+                
+                // YouTube video with videoId
+                if (item.videoId) {
+                  return (
+                    <>
+                      <TouchableOpacity
+                        style={styles.videoThumbnail}
+                        onPress={() => {
+                          setSelectedVideo({
+                            videoId: item.videoId!,
+                            platform: 'YouTube',
+                            title: item.title,
+                            summary: item.summary,
+                          });
+                        }}
+                      >
+                        <Image
+                          source={{ uri: item.media }}
+                          style={styles.videoThumbnailImage}
+                        />
+                        <View style={styles.playButtonOverlay}>
+                          <MaterialIcons
+                            name="play-circle-filled"
+                            size={64}
+                            color={colors.textPrimary}
+                          />
+                        </View>
+                        {item.videoPlatform && (
+                          <View style={styles.platformBadge}>
+                            <MaterialIcons
+                              name={item.videoPlatform === 'YouTube' ? 'play-circle-outline' : item.videoPlatform === 'Twitter' ? 'tag' : 'photo-camera'}
+                              size={14}
+                              color={colors.textPrimary}
+                            />
+                            <Text style={styles.platformBadgeText}>{item.videoPlatform}</Text>
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                      {/* Platform button below media */}
+                      <TouchableOpacity
+                        style={[styles.platformButton, styles.youtubeButton]}
+                        onPress={() => {
+                          setSelectedVideo({
+                            videoId: item.videoId!,
+                            platform: 'YouTube',
+                            title: item.title,
+                            summary: item.summary,
+                          });
+                        }}
+                      >
+                        <MaterialIcons name="play-circle-outline" size={20} color={colors.textPrimary} />
+                        <Text style={styles.platformButtonText}>Open on YouTube</Text>
+                      </TouchableOpacity>
+                    </>
+                  );
+                }
+                
+                // Instagram posts (can be in News or Videos category)
+                const instagramUrl = extractInstagramUrl(item);
+                if (instagramUrl) {
+                  // Show thumbnail with play button (Instagram embeds require login)
+                  // Clicking opens Instagram in browser/app where public posts can be viewed without login
+                  // Use item.media which has a working fallback thumbnail from pickThumbnail
+                  return (
+                    <>
+                      <TouchableOpacity
+                        style={styles.videoThumbnail}
+                        onPress={() => {
+                          // Open Instagram URL directly - public posts can be viewed without login in browser/app
+                          Linking.openURL(instagramUrl).catch(() => {
+                            Alert.alert('Error', 'Unable to open Instagram link.');
+                          });
+                        }}
+                      >
+                        <Image
+                          source={{ uri: item.media }}
+                          style={styles.videoThumbnailImage}
+                        />
+                        <View style={styles.playButtonOverlay}>
+                          <MaterialIcons
+                            name="play-circle-filled"
+                            size={64}
+                            color={colors.textPrimary}
+                          />
+                        </View>
+                        <View style={styles.platformBadge}>
+                          <MaterialIcons
+                            name="photo-camera"
+                            size={14}
+                            color={colors.textPrimary}
+                          />
+                          <Text style={styles.platformBadgeText}>Instagram</Text>
+                        </View>
+                      </TouchableOpacity>
+                      {/* Platform button below media */}
+                      <TouchableOpacity
+                        style={[styles.platformButton, styles.instagramButton]}
+                        onPress={() => Linking.openURL(instagramUrl).catch(() => {
+                          Alert.alert('Error', 'Unable to open Instagram link.');
+                        })}
+                      >
+                        <MaterialIcons name="photo-camera" size={20} color={colors.textPrimary} />
+                        <Text style={styles.platformButtonText}>Open on Instagram</Text>
+                      </TouchableOpacity>
+                    </>
+                  );
+                }
+                
+                // Other videos (non-Instagram, non-YouTube, non-Twitter)
+                if (item.category === 'Videos' && item.videoUrl) {
+                  const youtubeUrl = extractYouTubeUrl(item);
+                  
+                  return (
+                    <>
+                      <TouchableOpacity
+                        style={styles.videoThumbnail}
+                        onPress={() => {
+                          handleOpenExternalVideo(item.videoUrl!);
+                        }}
+                      >
+                        <Image
+                          source={{ uri: item.media }}
+                          style={styles.videoThumbnailImage}
+                        />
+                        <View style={styles.playButtonOverlay}>
+                          <MaterialIcons
+                            name="play-circle-filled"
+                            size={64}
+                            color={colors.textPrimary}
+                          />
+                        </View>
+                        {item.videoPlatform && (
+                          <View style={styles.platformBadge}>
+                            <MaterialIcons
+                              name={item.videoPlatform === 'YouTube' ? 'play-circle-outline' : item.videoPlatform === 'Twitter' ? 'tag' : 'photo-camera'}
+                              size={14}
+                              color={colors.textPrimary}
+                            />
+                            <Text style={styles.platformBadgeText}>{item.videoPlatform}</Text>
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                      {/* Platform button below media */}
+                      {youtubeUrl && (
+                        <TouchableOpacity
+                          style={[styles.platformButton, styles.youtubeButton]}
+                          onPress={() => {
+                            setSelectedVideo({
+                              videoUrl: youtubeUrl,
+                              platform: 'YouTube',
+                              title: item.title,
+                              summary: item.summary,
+                            });
+                          }}
+                        >
+                          <MaterialIcons name="play-circle-outline" size={20} color={colors.textPrimary} />
+                          <Text style={styles.platformButtonText}>Open on YouTube</Text>
+                        </TouchableOpacity>
+                      )}
+                    </>
+                  );
+                }
+                
+                // Regular image
+                return (
+                  <TouchableOpacity onPress={() => setSelectedImage(item.media)}>
+                    <Image
+                      source={{ uri: item.media }}
+                      style={styles.feedImage}
                     />
-                  </View>
-                </TouchableOpacity>
-              ) : item.category === 'Videos' && item.videoUrl ? (
-                <TouchableOpacity
-                  style={styles.videoThumbnail}
-                  onPress={() => handleOpenExternalVideo(item.videoUrl!)}
-                >
-                  <Image
-                    source={{ uri: item.media }}
-                    style={styles.videoThumbnailImage}
-                  />
-                  <View style={styles.playButtonOverlay}>
-                    <MaterialIcons
-                      name="play-circle-filled"
-                      size={64}
-                      color={colors.textPrimary}
-                    />
-                  </View>
-                </TouchableOpacity>
-              ) : (
-                <TouchableOpacity onPress={() => setSelectedImage(item.media)}>
-                  <Image
-                    source={{ uri: item.media }}
-                    style={styles.feedImage}
-                  />
-                </TouchableOpacity>
-              )}
+                  </TouchableOpacity>
+                );
+              })()}
               <View style={styles.actionsRow}>
                 <TouchableOpacity
                   style={[
@@ -1094,11 +1666,63 @@ export const PostsScreen = (): React.ReactElement => {
             </View>
             {selectedVideo && (
               <View style={styles.videoModalPlayer}>
-                <YouTubePlayer
-                  videoId={selectedVideo.videoId}
-                  height={220}
-                  play={true}
-                />
+                {selectedVideo.videoId && selectedVideo.platform === 'YouTube' ? (
+                  <YouTubePlayer
+                    videoId={selectedVideo.videoId}
+                    height={220}
+                    play={true}
+                  />
+                ) : selectedVideo.videoUrl && selectedVideo.platform === 'Twitter' ? (
+                  <TweetEmbed url={selectedVideo.videoUrl} height={400} />
+                ) : selectedVideo.videoUrl && selectedVideo.platform === 'Instagram' ? (
+                  // Instagram embeds require login, so open in browser/app instead
+                  <View style={styles.externalVideoContainer}>
+                    <MaterialIcons
+                      name="photo-camera"
+                      size={48}
+                      color={colors.textPrimary}
+                    />
+                    <Text style={styles.externalVideoText}>
+                      Opening Instagram post...
+                    </Text>
+                    <TouchableOpacity
+                      style={styles.externalVideoButton}
+                      onPress={() => {
+                        if (selectedVideo.videoUrl) {
+                          Linking.openURL(selectedVideo.videoUrl).catch(() => {
+                            Alert.alert('Error', 'Unable to open Instagram link.');
+                          });
+                        }
+                      }}
+                    >
+                      <Text style={styles.externalVideoButtonText}>Open in Instagram</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : selectedVideo.videoUrl ? (
+                  // For other platforms, show in WebView or open externally
+                  <View style={styles.externalVideoContainer}>
+                    <MaterialIcons
+                      name="play-circle-outline"
+                      size={48}
+                      color={colors.textPrimary}
+                    />
+                    <Text style={styles.externalVideoText}>
+                      Opening video...
+                    </Text>
+                    <TouchableOpacity
+                      style={styles.externalVideoButton}
+                      onPress={() => {
+                        if (selectedVideo.videoUrl) {
+                          Linking.openURL(selectedVideo.videoUrl).catch(() => {
+                            Alert.alert('Error', 'Unable to open video link.');
+                          });
+                        }
+                      }}
+                    >
+                      <Text style={styles.externalVideoButtonText}>Open in Browser</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : null}
               </View>
             )}
             {selectedVideo?.summary && (
@@ -1174,21 +1798,25 @@ const styles = StyleSheet.create({
   },
   filterRow: {
     backgroundColor: colors.surface,
-    borderRadius: 16,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: 12,
-    gap: 8,
+    padding: 10,
+    gap: 10,
+  },
+  filterSection: {
+    gap: 6,
   },
   filterLabel: {
     color: colors.textSecondary,
-    fontSize: 12,
-    marginBottom: 4,
+    fontSize: 11,
+    fontWeight: '600',
+    marginBottom: 2,
   },
   filterChipsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 6,
   },
   assemblySelectorContainer: {
     flexDirection: 'row',
@@ -1417,8 +2045,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
     flexDirection: 'row',
     alignItems: 'center',
   },
@@ -1553,6 +2181,43 @@ const styles = StyleSheet.create({
   feedSummary: {
     color: colors.textSecondary,
   },
+  twitterEmbedContainer: {
+    marginVertical: 8,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  platformButtonsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginVertical: 8,
+  },
+  platformButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  twitterButton: {
+    backgroundColor: '#1DA1F2',
+    borderColor: '#1DA1F2',
+  },
+  youtubeButton: {
+    backgroundColor: '#FF0000',
+    borderColor: '#FF0000',
+  },
+  instagramButton: {
+    backgroundColor: '#E4405F',
+    borderColor: '#E4405F',
+  },
+  platformButtonText: {
+    color: colors.textPrimary,
+    fontSize: 14,
+    fontWeight: '600',
+  },
   feedImage: {
     width: '100%',
     height: 150,
@@ -1585,6 +2250,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: 12,
+  },
+  platformBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  platformBadgeText: {
+    color: colors.textPrimary,
+    fontSize: 11,
+    fontWeight: '600',
   },
   closeVideoButton: {
     position: 'absolute',
@@ -1709,6 +2391,31 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     overflow: 'hidden',
     marginBottom: 16,
+    minHeight: 220,
+  },
+  externalVideoContainer: {
+    height: 220,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    gap: 12,
+  },
+  externalVideoText: {
+    color: colors.textSecondary,
+    fontSize: 14,
+  },
+  externalVideoButton: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  externalVideoButtonText: {
+    color: colors.textPrimary,
+    fontSize: 14,
+    fontWeight: '600',
   },
   videoModalSummary: {
     paddingTop: 16,

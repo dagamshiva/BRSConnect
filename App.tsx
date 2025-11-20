@@ -13,6 +13,7 @@ import { store } from "./src/store";
 import { colors } from "./src/theme/colors";
 import { LocalPollsProvider } from "./src/context/LocalPollsContext";
 import { LocalSuggestionsProvider } from "./src/context/LocalSuggestionsContext";
+import { BRSLogo } from "./src/components/BRSLogo";
 
 const LoadingOverlay = ({ onFinish }: { onFinish: () => void }) => {
   const translate = useRef(new Animated.Value(-80)).current;
@@ -49,7 +50,7 @@ const LoadingOverlay = ({ onFinish }: { onFinish: () => void }) => {
       <Animated.View
         style={[styles.carWrapper, { transform: [{ translateX: translate }] }]}
       >
-        <MaterialIcons name="directions-car" size={64} color="#E91E63" />
+        <BRSLogo size={100} showText={false} variant="icon" />
       </Animated.View>
       <Text style={styles.overlayTitle}>BRS Connect</Text>
       <Text style={styles.overlaySubtitle}>Powering the Pink Car movement…</Text>

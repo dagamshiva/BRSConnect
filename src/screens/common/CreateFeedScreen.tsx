@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colors } from '../../theme/colors';
 import { AssemblySelector } from '../../components/AssemblySelector';
@@ -30,6 +31,7 @@ interface FeedItem {
   media: string;
   videoId?: string;
   videoUrl?: string;
+  videoPlatform?: 'YouTube' | 'Twitter' | 'Instagram';
   likes: number;
   dislikes: number;
   comments: number;
@@ -43,6 +45,7 @@ interface FeedItem {
 export const CreateFeedScreen = (): JSX.Element => {
   const navigation = useNavigation();
   const route = useRoute();
+  const insets = useSafeAreaInsets();
   const onFeedCreated = (route.params as any)?.onFeedCreated;
   const [newTitle, setNewTitle] = useState('');
   const [newSummary, setNewSummary] = useState('');
@@ -50,6 +53,7 @@ export const CreateFeedScreen = (): JSX.Element => {
   const [newAssemblySegment, setNewAssemblySegment] = useState<string | null>(null);
   const [newMedia, setNewMedia] = useState<string | null>(null);
   const [mediaType, setMediaType] = useState<'image' | 'video' | null>(null);
+  const [videoPlatform, setVideoPlatform] = useState<'YouTube' | 'Twitter' | 'Instagram' | null>(null);
   const [showMediaInput, setShowMediaInput] = useState(false);
   const [mediaUrlInput, setMediaUrlInput] = useState('');
   const [scope, setScope] = useState<Scope>('assembly');
@@ -83,6 +87,7 @@ export const CreateFeedScreen = (): JSX.Element => {
             onPress: () => {
               setNewMedia(null);
               setMediaType(null);
+              setVideoPlatform(null);
             },
           },
         ],
@@ -114,6 +119,37 @@ export const CreateFeedScreen = (): JSX.Element => {
     }
   };
 
+  const detectVideoPlatform = (url: string): 'YouTube' | 'Twitter' | 'Instagram' | null => {
+    // YouTube patterns
+    const youtubePatterns = [
+      /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)/i,
+      /^[a-zA-Z0-9_-]{11}$/, // YouTube video ID format
+    ];
+    
+    // Twitter patterns
+    const twitterPatterns = [
+      /(?:twitter\.com|x\.com)\/\w+\/status\//i,
+      /t\.co\/\w+/i, // Twitter short links
+    ];
+    
+    // Instagram patterns
+    const instagramPatterns = [
+      /instagram\.com\/(?:p|reel|tv)\//i,
+    ];
+
+    if (youtubePatterns.some(pattern => pattern.test(url))) {
+      return 'YouTube';
+    }
+    if (twitterPatterns.some(pattern => pattern.test(url))) {
+      return 'Twitter';
+    }
+    if (instagramPatterns.some(pattern => pattern.test(url))) {
+      return 'Instagram';
+    }
+    
+    return null;
+  };
+
   const handleSaveMediaUrl = () => {
     if (!mediaUrlInput.trim()) {
       Alert.alert('Error', 'Please enter a valid URL');
@@ -121,23 +157,18 @@ export const CreateFeedScreen = (): JSX.Element => {
     }
 
     if (mediaType === 'video') {
-      const youtubeRegex =
-        /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
-      const match = mediaUrlInput.match(youtubeRegex);
-      if (match && match[1]) {
-        setNewMedia(mediaUrlInput);
-        setShowMediaInput(false);
-        setMediaUrlInput('');
-      } else if (
-        mediaUrlInput.length === 11 &&
-        !mediaUrlInput.includes('/') &&
-        !mediaUrlInput.includes('.')
-      ) {
+      const platform = detectVideoPlatform(mediaUrlInput);
+      
+      if (platform) {
+        setVideoPlatform(platform);
         setNewMedia(mediaUrlInput);
         setShowMediaInput(false);
         setMediaUrlInput('');
       } else {
-        Alert.alert('Error', 'Please enter a valid YouTube URL or video ID');
+        Alert.alert(
+          'Error',
+          'Please enter a valid YouTube, Twitter, or Instagram video URL',
+        );
       }
     } else {
       setNewMedia(mediaUrlInput);
@@ -273,21 +304,34 @@ export const CreateFeedScreen = (): JSX.Element => {
     // Handle NEWS, VIDEO, and other categories
     let videoId: string | undefined;
     let mediaUrl: string | undefined;
+    let detectedPlatform: 'YouTube' | 'Twitter' | 'Instagram' | undefined = videoPlatform || undefined;
+    
     if (newCategory === 'Videos' && newMedia) {
-      const youtubeRegex =
-        /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
-      const match = newMedia.match(youtubeRegex);
-      if (match && match[1]) {
-        videoId = match[1];
-        mediaUrl = newMedia;
-      } else if (
-        newMedia.length === 11 &&
-        !newMedia.includes('/') &&
-        !newMedia.includes('.')
-      ) {
-        videoId = newMedia;
-        mediaUrl = `https://www.youtube.com/watch?v=${newMedia}`;
+      // Detect platform if not already set
+      if (!detectedPlatform) {
+        detectedPlatform = detectVideoPlatform(newMedia) || undefined;
+      }
+      
+      // Extract YouTube video ID if it's a YouTube URL
+      if (detectedPlatform === 'YouTube') {
+        const youtubeRegex =
+          /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
+        const match = newMedia.match(youtubeRegex);
+        if (match && match[1]) {
+          videoId = match[1];
+          mediaUrl = newMedia;
+        } else if (
+          newMedia.length === 11 &&
+          !newMedia.includes('/') &&
+          !newMedia.includes('.')
+        ) {
+          videoId = newMedia;
+          mediaUrl = `https://www.youtube.com/watch?v=${newMedia}`;
+        } else {
+          mediaUrl = newMedia;
+        }
       } else {
+        // For Twitter and Instagram, just use the URL
         mediaUrl = newMedia;
       }
     }
@@ -299,6 +343,7 @@ export const CreateFeedScreen = (): JSX.Element => {
             type: 'VIDEO' as const,
             title: newTitle.trim() || newSummary.trim() || 'Untitled',
             mediaUrl: mediaUrl || newMedia || '',
+            videoPlatform: detectedPlatform || 'YouTube', // Default to YouTube for backward compatibility
             postedBy: 'demo-user-id',
             authorName: 'Demo User',
             areaScope: newAssemblySegment
@@ -347,17 +392,39 @@ export const CreateFeedScreen = (): JSX.Element => {
               dislikes: 0,
             };
 
+    // Generate proper media URL based on platform
+    let mediaUrlForDisplay: string;
+    if (newCategory === 'Videos' && newMedia && detectedPlatform) {
+      if (detectedPlatform === 'YouTube' && videoId) {
+        // Use actual YouTube thumbnail - this will show the real video thumbnail
+        mediaUrlForDisplay = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
+      } else if (detectedPlatform === 'Twitter' || detectedPlatform === 'Instagram') {
+        // For Twitter/Instagram, we can't get thumbnails without API calls
+        // In production, you would:
+        // 1. Make an API call to fetch the actual media/thumbnail
+        // 2. Use a service like linkpreview.net or opengraph.io
+        // 3. Store the thumbnail URL in your backend
+        // For now, use a placeholder that indicates it's a social media post
+        // The actual media will be visible when user clicks to open the link
+        mediaUrlForDisplay = newMedia; // Keep the URL, but it won't display as image
+        // You could also use: 'https://images.unsplash.com/photo-1500534314210-3a84de2e8fd5'
+      } else {
+        mediaUrlForDisplay = newMedia;
+      }
+    } else {
+      mediaUrlForDisplay = newMedia || 'https://images.unsplash.com/photo-1500534314210-3a84de2e8fd5';
+    }
+
     const newFeed: FeedItem = {
       id: feedId,
       scope: 'assembly',
       category: newCategory,
       title: newTitle.trim() || 'Untitled',
       summary: newSummary.trim() || '',
-      media:
-        newMedia ||
-        'https://images.unsplash.com/photo-1500534314210-3a84de2e8fd5',
+      media: mediaUrlForDisplay,
       videoId,
       videoUrl: mediaUrl,
+      videoPlatform: detectedPlatform,
       likes: 0,
       dislikes: 0,
       comments: 0,
@@ -380,7 +447,7 @@ export const CreateFeedScreen = (): JSX.Element => {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, 12) + 12 }]}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => navigation.goBack()}
@@ -408,6 +475,8 @@ export const CreateFeedScreen = (): JSX.Element => {
             placeholderTextColor={colors.textSecondary}
             value={newTitle}
             onChangeText={setNewTitle}
+            editable={true}
+            contextMenuHidden={false}
           />
 
           {newCategory !== 'Polls' && (
@@ -420,6 +489,8 @@ export const CreateFeedScreen = (): JSX.Element => {
                 multiline
                 value={newSummary}
                 onChangeText={setNewSummary}
+                editable={true}
+                contextMenuHidden={false}
               />
             </>
           )}
@@ -435,6 +506,8 @@ export const CreateFeedScreen = (): JSX.Element => {
                     placeholderTextColor={colors.textSecondary}
                     value={option.label}
                     onChangeText={label => handleUpdatePollOption(option.id, label)}
+                    editable={true}
+                    contextMenuHidden={false}
                   />
                   {pollOptions.length > 2 && (
                     <TouchableOpacity
@@ -515,18 +588,20 @@ export const CreateFeedScreen = (): JSX.Element => {
           {showMediaInput ? (
             <View style={styles.mediaInputContainer}>
               <Text style={styles.mediaInputLabel}>
-                {mediaType === 'video' ? 'Video URL' : 'Image URL'}
+                {mediaType === 'video' ? 'Video URL (YouTube, Twitter, or Instagram)' : 'Image URL'}
               </Text>
               <TextInput
                 style={styles.input}
                 placeholder={`Enter ${
-                  mediaType === 'video' ? 'video' : 'image'
+                  mediaType === 'video' ? 'YouTube, Twitter, or Instagram video URL' : 'image'
                 } URL`}
                 placeholderTextColor={colors.textSecondary}
                 value={mediaUrlInput}
                 onChangeText={setMediaUrlInput}
                 autoCapitalize="none"
                 keyboardType="url"
+                editable={true}
+                contextMenuHidden={false}
               />
               <View style={styles.mediaInputActions}>
                 <TouchableOpacity
@@ -560,12 +635,15 @@ export const CreateFeedScreen = (): JSX.Element => {
                     size={48}
                     color={colors.textPrimary}
                   />
-                  <Text style={styles.mediaPreviewText}>Video Selected</Text>
+                  <Text style={styles.mediaPreviewText}>
+                    {videoPlatform ? `${videoPlatform} Video Selected` : 'Video Selected'}
+                  </Text>
                   <TouchableOpacity
                     style={styles.removeMediaButton}
                     onPress={() => {
                       setNewMedia(null);
                       setMediaType(null);
+                      setVideoPlatform(null);
                     }}
                   >
                     <MaterialIcons
@@ -586,6 +664,7 @@ export const CreateFeedScreen = (): JSX.Element => {
                     onPress={() => {
                       setNewMedia(null);
                       setMediaType(null);
+                      setVideoPlatform(null);
                     }}
                   >
                     <MaterialIcons
@@ -619,7 +698,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    paddingTop: Platform.OS === 'ios' ? 50 : 20,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
     backgroundColor: colors.background,

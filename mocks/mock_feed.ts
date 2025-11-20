@@ -2058,4 +2058,37 @@ export const mockFeed = [
     likes: 691,
     dislikes: 29,
   },
+  {
+    id: 'twitter-teluguscribe-1991055528982900902',
+    type: 'NEWS',
+    title:
+      'తెలంగాణ వ్యాప్తంగా మొదటిసారి మహిళలకు చీర ఇచ్చే గొప్ప నిర్ణయం మా ప్రభుత్వం తీసుకుంది - డిప్యూటీ సీఎం భట్టి విక్రమార్క',
+    mediaUrl: 'https://x.com/TeluguScribe/status/1991055528982900902',
+    postedBy: 'demo-user',
+    authorName: 'Demo User',
+    areaScope: {
+      assemblySegment: 'Adilabad',
+      village: null,
+    },
+    postedAt: new Date().toISOString(),
+    likes: 0,
+    dislikes: 0,
+    videoPlatform: 'Twitter',
+  },
+  {
+    id: 'instagram-brspart-1991055528982900914',
+    type: 'NEWS',
+    title: 'Raitu gosa - Adilabad',
+    mediaUrl: 'https://www.instagram.com/p/DRPEw5Bge6H',
+    postedBy: 'demo-user',
+    authorName: 'Demo User',
+    areaScope: {
+      assemblySegment: 'Adilabad',
+      village: null,
+    },
+    postedAt: new Date().toISOString(),
+    likes: 0,
+    dislikes: 0,
+    videoPlatform: 'Instagram',
+  },
 ];
