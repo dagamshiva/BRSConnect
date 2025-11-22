@@ -3,7 +3,8 @@ import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "rea
 import MaterialIcons from "react-native-vector-icons/MaterialIcons";
 import { useNavigation } from "@react-navigation/native";
 
-import { colors } from "../../theme/colors";
+import { useTheme } from "../../theme/useTheme";
+import { UserBadge } from "../../components/UserBadge";
 import { useLocalPolls, type LocalPoll } from "../../context/LocalPollsContext";
 import { mockFeed } from "../../../mocks/mock_feed";
 import { telanganaUsers } from "../../../mocks/telangana_user";
@@ -29,6 +30,16 @@ const getUserAliasName = (userId: string | undefined | null): string => {
   }
   // If user not found, return the userId (UUID) as fallback
   return userId;
+};
+
+// Helper function to get user points by aliasName or name
+const getUserPoints = (aliasNameOrName: string): number | null => {
+  const user = telanganaUsers.find(
+    u =>
+      u.aliasName?.toLowerCase() === aliasNameOrName.toLowerCase() ||
+      u.name?.toLowerCase() === aliasNameOrName.toLowerCase(),
+  );
+  return user?.points ?? null;
 };
 
 const mockPollSeed: DisplayPoll[] = mockFeed
@@ -57,6 +68,7 @@ const mockPollSeed: DisplayPoll[] = mockFeed
 
 export const PollsScreen = (): JSX.Element => {
   const navigation = useNavigation();
+  const colors = useTheme();
   const { polls, vote, forwardToTrending } = useLocalPolls();
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
   const [userVotes, setUserVotes] = useState<Record<string, string>>({});
@@ -124,6 +136,259 @@ export const PollsScreen = (): JSX.Element => {
     );
   };
 
+  // Create dynamic styles based on current theme
+  const styles = useMemo(() => StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    content: {
+      padding: 24,
+      paddingBottom: 48,
+      gap: 16,
+    },
+    pageTitle: {
+      fontSize: 28,
+      fontWeight: "800",
+      color: colors.textPrimary,
+      marginTop: 20,
+      letterSpacing: -0.5,
+    },
+    pageSubtitle: {
+      color: colors.textSecondary,
+      marginTop: 6,
+      marginBottom: 16,
+      fontWeight: "600",
+      letterSpacing: -0.2,
+    },
+    createPollButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.primary,
+      borderRadius: 14,
+      paddingVertical: 14,
+      paddingHorizontal: 18,
+      gap: 8,
+      shadowColor: colors.primary,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 8,
+      elevation: 4,
+    },
+    createPollText: {
+      color: colors.textPrimary,
+      fontWeight: "800",
+      fontSize: 15,
+      letterSpacing: -0.2,
+    },
+    composer: {
+      backgroundColor: colors.card,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 16,
+      gap: 12,
+    },
+    composerTitle: {
+      color: colors.textPrimary,
+      fontWeight: "700",
+      fontSize: 16,
+    },
+    input: {
+      backgroundColor: colors.surface,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 12,
+      color: colors.textPrimary,
+    },
+    addButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.primary,
+      borderRadius: 14,
+      paddingVertical: 14,
+      paddingHorizontal: 18,
+      gap: 8,
+      shadowColor: colors.primary,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 8,
+      elevation: 4,
+    },
+    addButtonText: {
+      color: colors.textPrimary,
+      fontWeight: "800",
+      fontSize: 15,
+      letterSpacing: -0.2,
+    },
+    card: {
+      backgroundColor: colors.card,
+      borderRadius: 16,
+      borderWidth: 1.5,
+      borderColor: `${colors.primary}40`,
+      padding: 18,
+      marginBottom: 18,
+      shadowColor: colors.primary,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 8,
+      elevation: 2,
+    },
+    cardHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      marginBottom: 12,
+    },
+    cardStatus: {
+      color: colors.accent,
+      fontWeight: "700",
+    },
+    cardVotes: {
+      color: colors.textSecondary,
+      fontSize: 12,
+    },
+    cardQuestion: {
+      color: colors.textPrimary,
+      fontSize: 19,
+      fontWeight: "800",
+      marginBottom: 12,
+      letterSpacing: -0.3,
+      lineHeight: 24,
+    },
+    cardMetadata: {
+      color: colors.textSecondary,
+      fontSize: 12,
+      marginTop: -8,
+      marginBottom: 8,
+    },
+    metadataContainer: {
+      marginBottom: 12,
+      gap: 6,
+    },
+    metaRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      marginTop: 4,
+    },
+    metaItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+    },
+    metaText: {
+      color: colors.textSecondary,
+      fontSize: 12,
+      fontWeight: "600",
+    },
+    metaLabel: {
+      color: colors.textSecondary,
+      fontSize: 12,
+    },
+    metaValue: {
+      color: colors.textPrimary,
+      fontSize: 12,
+      fontWeight: "600",
+    },
+    optionRow: {
+      backgroundColor: colors.surface,
+      borderRadius: 12,
+      padding: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    optionSelected: {
+      borderColor: colors.primary,
+    },
+    optionHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+    },
+    optionLabel: {
+      color: colors.textPrimary,
+      fontWeight: "600",
+    },
+    optionVotes: {
+      color: colors.textSecondary,
+      fontSize: 12,
+    },
+    progressTrack: {
+      height: 8,
+      borderRadius: 4,
+      marginTop: 8,
+      backgroundColor: colors.border,
+    },
+    progressFill: {
+      height: "100%",
+      borderRadius: 4,
+      backgroundColor: colors.primary,
+    },
+    optionPercentage: {
+      color: colors.textSecondary,
+      fontSize: 11,
+      marginTop: 4,
+    },
+    voteButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.primary,
+      borderRadius: 14,
+      paddingVertical: 14,
+      paddingHorizontal: 18,
+      marginTop: 12,
+      gap: 8,
+      shadowColor: colors.primary,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 8,
+      elevation: 4,
+    },
+    voteButtonDisabled: {
+      opacity: 0.6,
+    },
+    voteButtonText: {
+      color: colors.textPrimary,
+      fontWeight: "800",
+      fontSize: 15,
+      letterSpacing: -0.2,
+    },
+    forwardButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.surface,
+      borderRadius: 12,
+      paddingVertical: 10,
+      marginTop: 8,
+      borderWidth: 1,
+      borderColor: colors.border,
+      gap: 6,
+    },
+    forwardButtonText: {
+      color: colors.textPrimary,
+      fontWeight: "600",
+      fontSize: 13,
+    },
+    emptyState: {
+      alignItems: "center",
+      marginTop: 48,
+      gap: 8,
+    },
+    emptyTitle: {
+      color: colors.textPrimary,
+      fontWeight: "700",
+    },
+    emptySubtitle: {
+      color: colors.textSecondary,
+      fontSize: 12,
+      textAlign: "center",
+    },
+  }), [colors]);
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.pageTitle}>Pink Car Polling Station</Text>
@@ -169,7 +434,23 @@ export const PollsScreen = (): JSX.Element => {
               {poll.postedBy ? (
                 <View style={styles.metaRow}>
                   <Text style={styles.metaLabel}>Posted by:</Text>
-                  <Text style={styles.metaValue}>{poll.postedBy}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
+                    <Text style={[styles.metaValue, { fontWeight: '800', color: colors.textPrimary }]}>{poll.postedBy}</Text>
+                    {(() => {
+                      const userPoints = getUserPoints(poll.postedBy);
+                      if (userPoints !== null && userPoints !== undefined) {
+                        return (
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                            <Text style={[styles.metaValue, { fontWeight: '600' }]}>
+                              • Points: {userPoints.toLocaleString()}
+                            </Text>
+                            <UserBadge points={userPoints} size={14} />
+                          </View>
+                        );
+                      }
+                      return null;
+                    })()}
+                  </View>
                 </View>
               ) : null}
               
@@ -250,209 +531,4 @@ export const PollsScreen = (): JSX.Element => {
     </ScrollView>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  content: {
-    padding: 24,
-    paddingBottom: 48,
-    gap: 16,
-  },
-  pageTitle: {
-    fontSize: 26,
-    fontWeight: "700",
-    color: colors.textPrimary,
-    marginTop: 20,
-  },
-  pageSubtitle: {
-    color: colors.textSecondary,
-    marginTop: 6,
-    marginBottom: 16,
-  },
-  composer: {
-    backgroundColor: colors.card,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 16,
-    gap: 12,
-  },
-  composerTitle: {
-    color: colors.textPrimary,
-    fontWeight: "700",
-    fontSize: 16,
-  },
-  input: {
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 12,
-    color: colors.textPrimary,
-  },
-  addButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.primary,
-    borderRadius: 12,
-    paddingVertical: 12,
-    gap: 8,
-  },
-  addButtonText: {
-    color: colors.textPrimary,
-    fontWeight: "700",
-  },
-  card: {
-    backgroundColor: colors.card,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 18,
-    marginBottom: 18,
-  },
-  cardHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 12,
-  },
-  cardStatus: {
-    color: colors.accent,
-    fontWeight: "700",
-  },
-  cardVotes: {
-    color: colors.textSecondary,
-    fontSize: 12,
-  },
-  cardQuestion: {
-    color: colors.textPrimary,
-    fontSize: 18,
-    fontWeight: "700",
-    marginBottom: 12,
-  },
-  cardMetadata: {
-    color: colors.textSecondary,
-    fontSize: 12,
-    marginTop: -8,
-    marginBottom: 8,
-  },
-  metadataContainer: {
-    marginBottom: 12,
-    gap: 6,
-  },
-  metaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginTop: 4,
-  },
-  metaItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  metaText: {
-    color: colors.textSecondary,
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  metaLabel: {
-    color: colors.textSecondary,
-    fontSize: 12,
-  },
-  metaValue: {
-    color: colors.textPrimary,
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  optionRow: {
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  optionSelected: {
-    borderColor: colors.primary,
-  },
-  optionHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  optionLabel: {
-    color: colors.textPrimary,
-    fontWeight: "600",
-  },
-  optionVotes: {
-    color: colors.textSecondary,
-    fontSize: 12,
-  },
-  progressTrack: {
-    height: 8,
-    backgroundColor: colors.border,
-    borderRadius: 999,
-    marginTop: 8,
-    overflow: "hidden",
-  },
-  progressFill: {
-    height: "100%",
-    backgroundColor: colors.primary,
-    borderRadius: 999,
-  },
-  optionPercentage: {
-    color: colors.textSecondary,
-    fontSize: 12,
-    marginTop: 6,
-    fontWeight: "600",
-  },
-  voteButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    backgroundColor: colors.primary,
-    borderRadius: 12,
-    paddingVertical: 12,
-  },
-  voteButtonDisabled: {
-    opacity: 0.6,
-  },
-  voteButtonText: {
-    color: colors.textPrimary,
-    fontWeight: "700",
-  },
-  forwardButton: {
-    marginTop: 10,
-    borderWidth: 1,
-    borderColor: colors.primary,
-    borderRadius: 12,
-    paddingVertical: 10,
-    alignItems: "center",
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 8,
-  },
-  forwardButtonText: {
-    color: colors.primary,
-    fontWeight: "700",
-    fontSize: 13,
-  },
-  emptyState: {
-    alignItems: "center",
-    marginTop: 48,
-    gap: 8,
-  },
-  emptyTitle: {
-    color: colors.textPrimary,
-    fontWeight: "600",
-  },
-  emptySubtitle: {
-    color: colors.textSecondary,
-    fontSize: 12,
-    textAlign: "center",
-  },
-});
 

@@ -267,7 +267,9 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     gap: 8,
+    height: 44,
     minHeight: 44,
+    maxHeight: 44,
   },
   selectorIcon: {
     marginRight: 4,

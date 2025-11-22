@@ -94,11 +94,16 @@ export const mapApprovalRequestFromApi = (user: any): ApprovalRequest => ({
 
 export const mapUserFromApi = (data: any): User => ({
   id: data.id,
-  name: data.name,
+  firstName: data.firstName ?? '',
+  lastName: data.lastName ?? '',
+  aliasName: data.aliasName ?? null,
+  name: data.name ?? (`${data.firstName ?? ''} ${data.lastName ?? ''}`.trim() || 'Unknown'),
   email: data.email ?? data.contactEmail ?? null,
   mobile: data.mobile ?? data.contactMobile ?? null,
   role: data.role ?? data.userRole ?? "Member",
   status: data.status ?? data.approvalStatus ?? "Pending",
+  designation: data.designation ?? null,
+  referralId: data.referralId ?? null,
   assignedAreas: {
     assemblySegment:
       data.assemblySegment ??
@@ -121,8 +126,16 @@ export const mapUserFromApi = (data: any): User => ({
       data.areaScope?.booth ??
       null,
   },
+  villageName: data.villageName ?? null,
+  isActive: data.isActive ?? true,
+  createdBy: data.createdBy ?? null,
+  createdDate: data.createdDate ?? null,
+  modifiedBy: data.modifiedBy ?? null,
+  modifiedDate: data.modifiedDate ?? null,
+  points: data.points ?? null,
   approvedBy: data.approvedById ?? data.approvedBy ?? null,
   approvedAt: data.approvedAt ?? null,
+  votingPreferences: data.votingPreferences ?? null,
 });
 
 export const mapTrendingMediaFromApi = (media: any): TrendingMedia => ({

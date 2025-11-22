@@ -8,6 +8,16 @@ export interface AssignedAreas {
   booth?: string | null;
 }
 
+export interface UserVotingPreferences {
+  // Party preference vote
+  partyPreference?: 'BRS' | 'Congress' | 'BJP' | 'Others' | null;
+  partyPreferenceUpdatedAt?: string | null;
+  
+  // BRS satisfaction vote
+  brsSatisfaction?: 'Happy' | 'Not Happy' | null;
+  brsSatisfactionUpdatedAt?: string | null;
+}
+
 export interface User {
   id: string;
   firstName: string;
@@ -30,6 +40,10 @@ export interface User {
   points?: number | null;
   approvedBy?: string | null;
   approvedAt?: string | null;
+  // Voting preferences for assembly segment
+  votingPreferences?: UserVotingPreferences | null;
+  // Bookmarks array to store feed IDs
+  bookmarks?: string[] | null;
 }
 
 export interface HighlightedSegment {

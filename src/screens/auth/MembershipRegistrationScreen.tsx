@@ -341,17 +341,25 @@ const styles = StyleSheet.create({
   },
   submitButton: {
     backgroundColor: colors.primary,
-    borderRadius: 10,
-    paddingVertical: 14,
+    borderRadius: 14,
+    paddingVertical: 16,
+    paddingHorizontal: 18,
     alignItems: 'center',
     marginTop: 24,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   submitButtonDisabled: {
     opacity: 0.6,
   },
   submitButtonText: {
     color: colors.textPrimary,
-    fontWeight: '700',
+    fontWeight: '800',
+    fontSize: 17,
+    letterSpacing: -0.2,
     fontSize: 16,
   },
   note: {

@@ -25,6 +25,12 @@ export interface MenuItem {
 export const menuConfig: Record<RoleKey, MenuItem[]> = {
   member: [
     {
+      name: 'Dashboard',
+      title: 'Overview',
+      icon: 'home',
+      component: DashboardScreen,
+    },
+    {
       name: 'Posts',
       title: 'Feed',
       icon: 'dynamic-feed',
@@ -56,6 +62,12 @@ export const menuConfig: Record<RoleKey, MenuItem[]> = {
     },
   ],
   localAdmin: [
+    {
+      name: 'Dashboard',
+      title: 'Overview',
+      icon: 'home',
+      component: DashboardScreen,
+    },
     {
       name: 'Posts',
       title: 'Feed',
@@ -91,7 +103,7 @@ export const menuConfig: Record<RoleKey, MenuItem[]> = {
     {
       name: 'Dashboard',
       title: 'Overview',
-      icon: 'workspace-premium',
+      icon: 'home',
       component: DashboardScreen,
     },
     {

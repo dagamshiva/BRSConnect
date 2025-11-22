@@ -18,7 +18,8 @@ import {
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 
-import { colors } from '../../theme/colors';
+import { useTheme } from '../../theme/useTheme';
+import { UserBadge } from '../../components/UserBadge';
 import { mockFeed } from '../../../mocks/mock_feed';
 import { telanganaUsers } from '../../../mocks/telangana_user';
 import {
@@ -57,6 +58,16 @@ const getUserName = (userId: string | undefined | null): string => {
   if (!userId) return 'Unknown';
   const user = telanganaUsers.find(u => u.id === userId);
   return user ? user.aliasName || user.name || 'Unknown' : userId;
+};
+
+// Helper function to get user points by aliasName or name
+const getUserPoints = (aliasNameOrName: string): number | null => {
+  const user = telanganaUsers.find(
+    u =>
+      u.aliasName?.toLowerCase() === aliasNameOrName.toLowerCase() ||
+      u.name?.toLowerCase() === aliasNameOrName.toLowerCase(),
+  );
+  return user?.points ?? null;
 };
 
 const feedFakeNews = mockFeed
@@ -100,6 +111,7 @@ const seedReports: FakeNewsItem[] =
 export const FakeNewsScreen = (): React.ReactElement => {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
+  const colors = useTheme();
   const [reports, setReports] = useState<FakeNewsItem[]>(seedReports);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -177,6 +189,171 @@ export const FakeNewsScreen = (): React.ReactElement => {
     Alert.alert('Saved locally', 'Fake news report added for demo.');
   };
 
+  // Create dynamic styles based on current theme
+  const styles = useMemo(() => StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    content: {
+      padding: 24,
+      paddingBottom: 64,
+      gap: 20,
+    },
+    pageTitle: {
+      color: colors.textPrimary,
+      fontSize: 28,
+      fontWeight: '800',
+      marginTop: 20,
+      letterSpacing: -0.5,
+    },
+    pageSubtitle: {
+      color: colors.textSecondary,
+      marginTop: 6,
+      marginBottom: 16,
+      fontWeight: '600',
+      letterSpacing: -0.2,
+    },
+    composer: {
+      backgroundColor: colors.card,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 16,
+      gap: 12,
+    },
+    composerTitle: {
+      color: colors.textPrimary,
+      fontWeight: '700',
+      fontSize: 16,
+    },
+    input: {
+      backgroundColor: colors.surface,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 12,
+      color: colors.textPrimary,
+    },
+    inputMultiline: {
+      minHeight: 90,
+      textAlignVertical: 'top',
+    },
+    addButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      backgroundColor: colors.primary,
+      borderRadius: 14,
+      paddingVertical: 14,
+      paddingHorizontal: 18,
+      shadowColor: colors.primary,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 8,
+      elevation: 4,
+    },
+    addButtonText: {
+      color: colors.textPrimary,
+      fontWeight: '800',
+      fontSize: 15,
+      letterSpacing: -0.2,
+    },
+    sectionTitle: {
+      color: colors.textPrimary,
+      fontSize: 18,
+      fontWeight: '700',
+      marginTop: 12,
+    },
+    card: {
+      backgroundColor: colors.card,
+      borderRadius: 16,
+      borderWidth: 1.5,
+      borderColor: `${colors.primary}40`,
+      padding: 16,
+      marginTop: 14,
+      gap: 12,
+      shadowColor: colors.primary,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 8,
+      elevation: 2,
+    },
+    cardHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    cardTitle: {
+      color: colors.textPrimary,
+      fontWeight: '700',
+      flex: 1,
+    },
+    cardImage: {
+      width: '100%',
+      height: 170,
+      borderRadius: 12,
+    },
+    cardDescription: {
+      color: colors.textSecondary,
+      lineHeight: 18,
+    },
+    reporterName: {
+      fontWeight: '700',
+      color: colors.textPrimary,
+    },
+    metaRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginTop: 8,
+    },
+    metaLabel: {
+      color: colors.textSecondary,
+      fontSize: 12,
+    },
+    metaValue: {
+      color: colors.textPrimary,
+      fontSize: 12,
+      fontWeight: '600',
+    },
+    voteRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      gap: 12,
+    },
+    voteButton: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+      paddingVertical: 10,
+      borderRadius: 10,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    voteText: {
+      color: colors.textPrimary,
+      fontWeight: '600',
+    },
+    emptyState: {
+      alignItems: 'center',
+      marginTop: 48,
+      gap: 8,
+    },
+    emptyTitle: {
+      color: colors.textPrimary,
+      fontWeight: '700',
+    },
+    emptySubtitle: {
+      color: colors.textSecondary,
+      fontSize: 12,
+      textAlign: 'center',
+    },
+  }), [colors]);
+
   return (
     <ScrollView
       ref={scrollRef}
@@ -195,7 +372,23 @@ export const FakeNewsScreen = (): React.ReactElement => {
           <Image source={{ uri: item.media }} style={styles.cardImage} />
           <View style={styles.metaRow}>
             <Text style={styles.metaLabel}>Reported by</Text>
-            <Text style={styles.metaValue}>{item.aliasName}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
+              <Text style={[styles.metaValue, { fontWeight: '800', color: colors.textPrimary }]}>{item.aliasName}</Text>
+              {(() => {
+                const userPoints = getUserPoints(item.aliasName);
+                if (userPoints !== null && userPoints !== undefined) {
+                  return (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <Text style={[styles.metaValue, { fontWeight: '600' }]}>
+                        • Points: {userPoints.toLocaleString()}
+                      </Text>
+                      <UserBadge points={userPoints} size={14} />
+                    </View>
+                  );
+                }
+                return null;
+              })()}
+            </View>
           </View>
           <View style={styles.metaRow}>
             <Text style={styles.metaLabel}>Reported date</Text>
@@ -243,151 +436,3 @@ export const FakeNewsScreen = (): React.ReactElement => {
     </ScrollView>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  content: {
-    padding: 24,
-    paddingBottom: 64,
-    gap: 20,
-  },
-  pageTitle: {
-    color: colors.textPrimary,
-    fontSize: 26,
-    fontWeight: '700',
-    marginTop: 20,
-  },
-  pageSubtitle: {
-    color: colors.textSecondary,
-    marginTop: 6,
-    marginBottom: 16,
-  },
-  composer: {
-    backgroundColor: colors.card,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 16,
-    gap: 12,
-  },
-  composerTitle: {
-    color: colors.textPrimary,
-    fontWeight: '700',
-    fontSize: 16,
-  },
-  input: {
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 12,
-    color: colors.textPrimary,
-  },
-  inputMultiline: {
-    minHeight: 90,
-    textAlignVertical: 'top',
-  },
-  addButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: colors.primary,
-    borderRadius: 12,
-    paddingVertical: 12,
-  },
-  addButtonText: {
-    color: colors.textPrimary,
-    fontWeight: '700',
-  },
-  sectionTitle: {
-    color: colors.textPrimary,
-    fontSize: 18,
-    fontWeight: '700',
-    marginTop: 12,
-  },
-  card: {
-    backgroundColor: colors.card,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 16,
-    marginTop: 14,
-    gap: 12,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  cardTitle: {
-    color: colors.textPrimary,
-    fontWeight: '700',
-    flex: 1,
-  },
-  cardImage: {
-    width: '100%',
-    height: 170,
-    borderRadius: 12,
-  },
-  cardDescription: {
-    color: colors.textSecondary,
-    lineHeight: 18,
-  },
-  reporterName: {
-    fontWeight: '700',
-    color: colors.textPrimary,
-  },
-  metaRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 8,
-  },
-  metaLabel: {
-    color: colors.textSecondary,
-    fontSize: 12,
-  },
-  metaValue: {
-    color: colors.textPrimary,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  voteRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  voteButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    borderRadius: 10,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  voteText: {
-    color: colors.textPrimary,
-    fontWeight: '600',
-  },
-  emptyState: {
-    alignItems: 'center',
-    marginTop: 48,
-    gap: 8,
-  },
-  emptyTitle: {
-    color: colors.textPrimary,
-    fontWeight: '700',
-  },
-  emptySubtitle: {
-    color: colors.textSecondary,
-    fontSize: 12,
-    textAlign: 'center',
-  },
-});

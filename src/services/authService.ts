@@ -111,6 +111,14 @@ const getCurrentUserMock = async () => {
     });
   }
 
+  // Sync with telanganaUsers to get latest voting preferences
+  // Import dynamically to avoid circular dependency
+  const { telanganaUsers } = require('../../mocks/telangana_user');
+  const updatedUser = telanganaUsers.find(u => u.id === record.user.id);
+  if (updatedUser) {
+    record.user = updatedUser; // Update the record with latest data
+  }
+
   return mockResponse(record.user);
 };
 

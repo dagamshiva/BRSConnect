@@ -9,6 +9,7 @@ import reportsReducer from "./slices/reportsSlice";
 import segmentsReducer from "./slices/segmentsSlice";
 import trendingReducer from "./slices/trendingSlice";
 import userDetailRequestsReducer from "./slices/userDetailRequestsSlice";
+import themeReducer from "./slices/themeSlice";
 import { attachTokenInterceptor } from "../services/api";
 
 export const store = configureStore({
@@ -22,6 +23,7 @@ export const store = configureStore({
     trending: trendingReducer,
     fakeNews: fakeNewsReducer,
     userDetailRequests: userDetailRequestsReducer,
+    theme: themeReducer,
   },
 });
 

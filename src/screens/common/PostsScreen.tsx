@@ -16,14 +16,16 @@ import {
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { useNavigation } from '@react-navigation/native';
 
-import { colors } from '../../theme/colors';
+import { useTheme } from '../../theme/useTheme';
 import { useAppSelector } from '../../store/hooks';
 import { selectAuth } from '../../store/slices/authSlice';
 import { YouTubePlayer } from '../../components/embeds/YouTubePlayer';
 import { TweetEmbed } from '../../components/embeds/TweetEmbed';
 import { useLocalPolls } from '../../context/LocalPollsContext';
 import { AssemblySelector } from '../../components/AssemblySelector';
+import { UserBadge } from '../../components/UserBadge';
 import { mockFeed } from '../../../mocks/mock_feed';
+import { telanganaUsers } from '../../../mocks/telangana_user';
 import {
   CATEGORY_OPTIONS,
   TYPE_TO_CATEGORY_MAP,
@@ -70,6 +72,38 @@ interface LegacyFeedItem
 }
 
 type MockFeedItem = (typeof mockFeed)[number];
+
+// Helper function to build Instagram thumbnail URL
+// Defined early to ensure it's available when seedFeeds is evaluated
+function buildInstagramThumbnail(url: string | undefined | null): string | null {
+  // Guard against undefined/null/empty URLs
+  if (!url || typeof url !== 'string') {
+    return null;
+  }
+  
+  // Handle Instagram posts and reels: /p/{shortcode} or /reel/{shortcode}
+  const postReelMatch = url.match(
+    /instagram\.com\/(?:p|reel|reels|tv)\/([^/?#]+)/i,
+  );
+  if (postReelMatch?.[1]) {
+    const shortcode = postReelMatch[1];
+    // Use Instagram's media endpoint for thumbnail (works for public posts/reels)
+    return `https://www.instagram.com/p/${shortcode}/media/?size=l`;
+  }
+  
+  // Handle Instagram stories: /stories/{username}/{storyId}
+  const storyMatch = url.match(
+    /instagram\.com\/stories\/([^/]+)\/([^/?#]+)/i,
+  );
+  if (storyMatch?.[1] && storyMatch?.[2]) {
+    // For stories, we can't easily get thumbnails without authentication
+    // Return null and use a placeholder thumbnail instead
+    // The component should handle this with a fallback
+    return null;
+  }
+  
+  return null;
+}
 
 const buildSummary = (item: MockFeedItem): string => {
   const segment = item.areaScope?.assemblySegment ?? 'All Segments';
@@ -127,10 +161,16 @@ const pickThumbnail = (
     return randomElement(IMAGE_THUMBNAILS);
   }
   
-  // For Instagram: Use a fallback thumbnail instead of Instagram's media endpoint
-  // Instagram's /media/ endpoint requires authentication and doesn't work
-  // The thumbnail will be shown, and clicking opens Instagram in browser/app
+  // For Instagram: Try to build thumbnail URL, fallback to random thumbnail if it fails
   if (videoPlatform === 'Instagram') {
+    // Try to extract URL from videoUrl or other sources
+    if (videoUrl) {
+      const thumbnailUrl = buildInstagramThumbnail(videoUrl);
+      if (thumbnailUrl) {
+        return thumbnailUrl;
+      }
+    }
+    // Fallback to random thumbnail if we can't build a proper URL (e.g., stories)
     return randomElement(VIDEO_THUMBNAILS);
   }
   
@@ -170,7 +210,7 @@ const seedFeeds: FeedItem[] = mockFeed.slice(0, 300).map(item => {
       videoPlatform = 'YouTube';
     } else if (/(?:twitter\.com|x\.com)\/\w+\/status\//i.test(item.mediaUrl) || /t\.co\/\w+/i.test(item.mediaUrl)) {
       videoPlatform = 'Twitter';
-    } else if (/instagram\.com\/(?:p|reel|tv|reels)\//i.test(item.mediaUrl)) {
+    } else if (/instagram\.com\/(?:p|reel|tv|reels|stories)\//i.test(item.mediaUrl)) {
       videoPlatform = 'Instagram';
     }
   }
@@ -237,7 +277,7 @@ const convertLegacyFeed = (item: LegacyFeedItem): FeedItem => {
       videoPlatform = 'YouTube';
     } else if (/(?:twitter\.com|x\.com)\/\w+\/status\//i.test(url) || /t\.co\/\w+/i.test(url)) {
       videoPlatform = 'Twitter';
-    } else if (/instagram\.com\/(?:p|reel|tv)\//i.test(url)) {
+    } else if (/instagram\.com\/(?:p|reel|tv|reels|stories)\//i.test(url)) {
       videoPlatform = 'Instagram';
     }
   }
@@ -310,18 +350,6 @@ const extractYouTubeUrl = (item: FeedItem): string | null => {
   return null;
 };
 
-const buildInstagramThumbnail = (url: string): string | null => {
-  const match = url.match(
-    /instagram\.com\/(?:p|reel|reels|tv)\/([^/?#]+)/i,
-  );
-  const shortcode = match?.[1];
-  if (!shortcode) {
-    return null;
-  }
-  // Fallback to /p/ path which works for standard posts
-  return `https://www.instagram.com/p/${shortcode}/media/?size=l`;
-};
-
 // Helper function to extract Instagram URL from feed item
 const extractInstagramUrl = (item: FeedItem): string | null => {
   // If videoPlatform is explicitly Instagram, return videoUrl directly
@@ -331,15 +359,15 @@ const extractInstagramUrl = (item: FeedItem): string | null => {
   
   // Check videoUrl first
   if (item.videoUrl) {
-    const instagramMatch = item.videoUrl.match(/(?:https?:\/\/)?(?:www\.)?instagram\.com\/(?:p|reel|tv|reels)\/[a-zA-Z0-9_-]+\/?/i);
+    const instagramMatch = item.videoUrl.match(/(?:https?:\/\/)?(?:www\.)?instagram\.com\/(?:p|reel|tv|reels|stories)\/[^/\s?#]+/i);
     if (instagramMatch) {
       return instagramMatch[0].startsWith('http') ? instagramMatch[0] : `https://${instagramMatch[0]}`;
     }
   }
   
-  // Check summary for Instagram URLs
+  // Check summary for Instagram URLs (including stories)
   if (item.summary) {
-    const instagramMatch = item.summary.match(/(?:https?:\/\/)?(?:www\.)?instagram\.com\/(?:p|reel|tv|reels)\/[a-zA-Z0-9_-]+\/?/i);
+    const instagramMatch = item.summary.match(/(?:https?:\/\/)?(?:www\.)?instagram\.com\/(?:p|reel|tv|reels|stories)\/[^/\s?#]+/i);
     if (instagramMatch) {
       return instagramMatch[0].startsWith('http') ? instagramMatch[0] : `https://${instagramMatch[0]}`;
     }
@@ -347,7 +375,7 @@ const extractInstagramUrl = (item: FeedItem): string | null => {
   
   // Also check media field in case URL is stored there
   if (item.media && typeof item.media === 'string') {
-    const instagramMatch = item.media.match(/(?:https?:\/\/)?(?:www\.)?instagram\.com\/(?:p|reel|tv|reels)\/[a-zA-Z0-9_-]+\/?/i);
+    const instagramMatch = item.media.match(/(?:https?:\/\/)?(?:www\.)?instagram\.com\/(?:p|reel|tv|reels|stories)\/[^/\s?#]+/i);
     if (instagramMatch) {
       return instagramMatch[0].startsWith('http') ? instagramMatch[0] : `https://${instagramMatch[0]}`;
     }
@@ -356,21 +384,84 @@ const extractInstagramUrl = (item: FeedItem): string | null => {
   return null;
 };
 
+// Helper function to check if post is from social media platforms
+const isSocialMediaPost = (item: FeedItem): boolean => {
+  // Check if videoPlatform is explicitly set to social media
+  if (item.videoPlatform === 'Twitter' || item.videoPlatform === 'Instagram' || item.videoPlatform === 'YouTube') {
+    return true;
+  }
+  
+  // Check for social media URLs
+  const twitterUrl = extractTwitterUrl(item);
+  const instagramUrl = extractInstagramUrl(item);
+  const youtubeUrl = extractYouTubeUrl(item);
+  const hasFacebookUrl = item.media?.match(/facebook\.com|fb\.com/i) || 
+                         item.videoUrl?.match(/facebook\.com|fb\.com/i) ||
+                         item.summary?.match(/facebook\.com|fb\.com/i);
+  
+  return !!(twitterUrl || instagramUrl || youtubeUrl || hasFacebookUrl);
+};
+
+// Helper function to download image or video
+const handleDownloadImage = (mediaUrl: string, isVideo: boolean = false) => {
+  const mediaType = isVideo ? 'Video' : 'Image';
+  Alert.alert(
+    `Download ${mediaType}`,
+    `Choose how you want to download:`,
+    [
+      {
+        text: 'Open in Browser',
+        onPress: () => {
+          Linking.openURL(mediaUrl).catch(() => {
+            Alert.alert('Error', `Unable to open ${mediaType.toLowerCase()} URL.`);
+          });
+        },
+      },
+      {
+        text: 'Download Instructions',
+        onPress: () => {
+          Alert.alert(
+            'Download Instructions',
+            `To download the ${mediaType.toLowerCase()}:\n\n1. Open the ${mediaType.toLowerCase()} in browser\n2. Long press on the ${mediaType.toLowerCase()}\n3. Select "Save ${mediaType}" or "Download ${mediaType}"\n\nYou can also use ${mediaType.toLowerCase()} downloader apps from app store.`,
+            [{ text: 'OK' }],
+          );
+        },
+      },
+      {
+        text: 'Cancel',
+        style: 'cancel',
+      },
+    ],
+  );
+};
+
 // Helper function to remove URLs from text
 const removeUrlsFromText = (text: string): string => {
   // Remove Twitter URLs
   text = text.replace(/(?:https?:\/\/)?(?:www\.)?(?:twitter\.com|x\.com)\/\w+\/status\/\d+/gi, '');
   // Remove YouTube URLs
   text = text.replace(/(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)[a-zA-Z0-9_-]+/gi, '');
-  // Remove Instagram URLs
-  text = text.replace(/(?:https?:\/\/)?(?:www\.)?instagram\.com\/(?:p|reel|tv)\/[a-zA-Z0-9_-]+\/?/gi, '');
+  // Remove Instagram URLs (including stories)
+  text = text.replace(/(?:https?:\/\/)?(?:www\.)?instagram\.com\/(?:p|reel|tv|reels|stories)\/[^/\s?#]+/gi, '');
   // Clean up extra spaces
   text = text.replace(/\s+/g, ' ').trim();
   return text;
 };
 
+// Helper function to get user points by aliasName or name
+const getUserPoints = (aliasNameOrName: string): number | null | undefined => {
+  if (!aliasNameOrName) return null;
+  const user = telanganaUsers.find(
+    u =>
+      u.aliasName?.toLowerCase() === aliasNameOrName.toLowerCase() ||
+      u.name?.toLowerCase() === aliasNameOrName.toLowerCase(),
+  );
+  return user?.points ?? null;
+};
+
 export const PostsScreen = (): React.ReactElement => {
   const navigation = useNavigation();
+  const colors = useTheme();
   const { polls, vote, updatePollReaction } = useLocalPolls();
   const auth = useAppSelector(selectAuth);
   const user = auth.user;
@@ -385,6 +476,7 @@ export const PostsScreen = (): React.ReactElement => {
     string | null
   >(null); // Default to null (shows "All")
   const [sortMode, setSortMode] = useState<SortMode>('latest');
+  const [filtersExpanded, setFiltersExpanded] = useState<boolean>(false);
 
   const [playingVideoId, setPlayingVideoId] = useState<string | null>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -407,6 +499,31 @@ export const PostsScreen = (): React.ReactElement => {
   const [userPollVotes, setUserPollVotes] = useState<Record<string, string>>(
     {},
   );
+  const [userBookmarks, setUserBookmarks] = useState<Set<string>>(
+    new Set(user?.bookmarks || []),
+  );
+
+  // Bookmark handler
+  const handleToggleBookmark = (feedId: string) => {
+    if (!user?.id) {
+      Alert.alert('Error', 'Please login to bookmark feeds.');
+      return;
+    }
+
+    const newBookmarks = new Set(userBookmarks);
+    if (newBookmarks.has(feedId)) {
+      newBookmarks.delete(feedId);
+    } else {
+      newBookmarks.add(feedId);
+    }
+    setUserBookmarks(newBookmarks);
+
+    // Update telanganaUsers array
+    const userIndex = telanganaUsers.findIndex(u => u.id === user.id);
+    if (userIndex !== -1) {
+      telanganaUsers[userIndex].bookmarks = Array.from(newBookmarks);
+    }
+  };
 
   const topTrending = useMemo(
     () => [...feeds].sort((a, b) => b.likes - a.likes).slice(0, 10),
@@ -629,6 +746,90 @@ export const PostsScreen = (): React.ReactElement => {
     );
   };
 
+  // Handle download for Instagram videos
+  const handleDownloadInstagramVideo = (item: FeedItem) => {
+    const instagramUrl = extractInstagramUrl(item);
+    if (!instagramUrl) {
+      Alert.alert('Error', 'Instagram URL not found.');
+      return;
+    }
+
+    Alert.alert(
+      'Download Instagram Video',
+      'Choose how you want to download:',
+      [
+        {
+          text: 'Open in Instagram',
+          onPress: () => {
+            Linking.openURL(instagramUrl).catch(() => {
+              Alert.alert('Error', 'Unable to open Instagram link.');
+            });
+          },
+        },
+        {
+          text: 'Download Instructions',
+          onPress: () => {
+            Linking.openURL(instagramUrl).catch(() => {
+              Alert.alert('Error', 'Unable to open Instagram link.');
+            });
+            setTimeout(() => {
+              Alert.alert(
+                'How to Download',
+                'To download Instagram videos:\n\n1. Open the video in Instagram app/browser\n2. For public posts: Long press and select "Save" or use browser download tools\n3. Use Instagram downloader websites/services\n4. Use video downloader apps from app store',
+              );
+            }, 500);
+          },
+        },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+      ],
+      { cancelable: true },
+    );
+  };
+
+  // Handle download for Twitter/X videos
+  const handleDownloadTwitterVideo = (item: FeedItem) => {
+    const twitterUrl = extractTwitterUrl(item);
+    if (!twitterUrl) {
+      Alert.alert('Error', 'Twitter URL not found.');
+      return;
+    }
+
+    Alert.alert(
+      'Download Twitter Video',
+      'Choose how you want to download:',
+      [
+        {
+          text: 'Open in X/Twitter',
+          onPress: () => {
+            Linking.openURL(twitterUrl).catch(() => {
+              Alert.alert('Error', 'Unable to open Twitter link.');
+            });
+          },
+        },
+        {
+          text: 'Download via Browser',
+          onPress: () => {
+            Linking.openURL(twitterUrl).catch(() => {
+              Alert.alert('Error', 'Unable to open Twitter link.');
+            });
+            Alert.alert(
+              'Download Instructions',
+              'To download:\n1. Open the tweet in browser\n2. Right-click/long press on the video\n3. Select "Save Video" or use a downloader tool\n\nYou can also use Twitter video downloader websites.',
+            );
+          },
+        },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+      ],
+      { cancelable: true },
+    );
+  };
+
   const handleShareToWhatsApp = (item: FeedItem) => {
     const message = `${item.title}\n\n${item.summary}`;
     const url = item.videoId
@@ -721,6 +922,739 @@ export const PostsScreen = (): React.ReactElement => {
     }
   };
 
+  // Create dynamic styles based on current theme
+  const styles = useMemo(() => StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    pageTitle: {
+      color: colors.textPrimary,
+      fontSize: 28,
+      fontWeight: '800',
+      marginTop: 20,
+      letterSpacing: -0.5,
+    },
+    pageSubtitle: {
+      color: colors.textSecondary,
+      marginTop: 6,
+      marginBottom: 16,
+      fontWeight: '600',
+      letterSpacing: -0.2,
+    },
+    content: {
+      padding: 24,
+      paddingBottom: 64,
+      gap: 16,
+    },
+    scopeRow: {
+      flexDirection: 'row',
+      gap: 10,
+      alignItems: 'stretch',
+      marginBottom: 16,
+    },
+    scopeTab: {
+      flex: 1,
+      paddingVertical: 12,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.card,
+      minHeight: 44,
+    },
+    scopeTabActive: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    scopeLabel: {
+      color: colors.textSecondary,
+      fontWeight: '600',
+      fontSize: 13,
+      textAlign: 'center',
+    },
+    scopeLabelActive: {
+      color: colors.textPrimary,
+    },
+    createFeedButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.primary,
+      borderRadius: 14,
+      paddingVertical: 14,
+      paddingHorizontal: 18,
+      gap: 8,
+      shadowColor: colors.primary,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 8,
+      elevation: 4,
+    },
+    createFeedButtonText: {
+      color: colors.textPrimary,
+      fontWeight: '800',
+      fontSize: 15,
+      letterSpacing: -0.2,
+    },
+    filterRow: {
+      backgroundColor: colors.surface,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 10,
+      gap: 10,
+    },
+    filterHeader: {
+      paddingVertical: 4,
+    },
+    filterHeaderContent: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    filterHeaderLabels: {
+      flexDirection: 'row',
+      gap: 16,
+      flex: 1,
+    },
+    filterSection: {
+      gap: 6,
+      paddingTop: 4,
+    },
+    filterLabel: {
+      color: colors.textSecondary,
+      fontSize: 11,
+      fontWeight: '600',
+      marginBottom: 2,
+    },
+    filterValue: {
+      color: colors.textPrimary,
+      fontWeight: '700',
+    },
+    filterChipsContainer: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 6,
+    },
+    assemblySelectorContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 16,
+      gap: 8,
+    },
+    assemblySelectorButton: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+      gap: 8,
+      minHeight: 44,
+    },
+    assemblySelectorIcon: {
+      marginRight: 4,
+    },
+    assemblySelectorText: {
+      flex: 1,
+      color: colors.textPrimary,
+      fontSize: 14,
+      fontWeight: '500',
+    },
+    clearAssemblyButton: {
+      padding: 8,
+      borderRadius: 8,
+      backgroundColor: colors.surface,
+    },
+    assemblyDropdownContainer: {
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      marginBottom: 16,
+      maxHeight: 300,
+      overflow: 'hidden',
+    },
+    assemblySearchContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.surface,
+      borderRadius: 8,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      margin: 12,
+      gap: 8,
+    },
+    assemblySearchIcon: {
+      marginRight: 4,
+    },
+    assemblySearchInput: {
+      flex: 1,
+      color: colors.textPrimary,
+      fontSize: 14,
+      paddingVertical: 4,
+    },
+    assemblyDropdownList: {
+      maxHeight: 250,
+    },
+    assemblyDropdownItem: {
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    assemblyDropdownItemActive: {
+      backgroundColor: colors.primary + '20',
+    },
+    assemblyDropdownItemText: {
+      color: colors.textPrimary,
+      fontSize: 14,
+      fontWeight: '500',
+    },
+    assemblyDropdownItemTextActive: {
+      color: colors.primary,
+      fontWeight: '600',
+    },
+    feedCard: {
+      backgroundColor: colors.card,
+      borderRadius: 16,
+      borderWidth: 1.5,
+      borderColor: `${colors.primary}40`,
+      padding: 16,
+      marginTop: 12,
+      gap: 12,
+      shadowColor: colors.primary,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 8,
+      elevation: 2,
+    },
+    feedHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    feedCategory: {
+      color: colors.accent,
+      fontWeight: '700',
+      fontSize: 12,
+      textTransform: 'uppercase',
+    },
+    feedTitle: {
+      color: colors.textPrimary,
+      fontSize: 17,
+      fontWeight: '800',
+      marginTop: 4,
+      letterSpacing: -0.3,
+      lineHeight: 22,
+    },
+    feedAssemblySegment: {
+      color: colors.textSecondary,
+      fontSize: 12,
+      marginTop: 4,
+      fontWeight: '500',
+    },
+    feedMeta: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginTop: 6,
+    },
+    feedAliasName: {
+      color: colors.textSecondary,
+      fontSize: 11,
+      fontWeight: '500',
+    },
+    feedTimestamp: {
+      color: colors.textSecondary,
+      fontSize: 11,
+      fontWeight: '400',
+    },
+    feedSummary: {
+      color: colors.textSecondary,
+    },
+    twitterEmbedContainer: {
+      marginVertical: 8,
+      borderRadius: 12,
+      overflow: 'hidden',
+      position: 'relative',
+    },
+    platformButtonsContainer: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+      marginVertical: 8,
+    },
+    platformButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      borderRadius: 8,
+      borderWidth: 1,
+    },
+    twitterButton: {
+      backgroundColor: '#1DA1F2',
+      borderColor: '#1DA1F2',
+    },
+    youtubeButton: {
+      backgroundColor: '#FF0000',
+      borderColor: '#FF0000',
+    },
+    instagramButton: {
+      backgroundColor: '#E4405F',
+      borderColor: '#E4405F',
+    },
+    platformButtonText: {
+      color: colors.textPrimary,
+      fontSize: 14,
+      fontWeight: '600',
+    },
+    feedImage: {
+      width: '100%',
+      height: 150,
+      borderRadius: 12,
+    },
+    videoContainer: {
+      position: 'relative',
+      width: '100%',
+      borderRadius: 12,
+      overflow: 'hidden',
+      marginBottom: 4,
+    },
+    videoThumbnail: {
+      position: 'relative',
+      width: '100%',
+      height: 200,
+    },
+    videoThumbnailImage: {
+      width: '100%',
+      height: 200,
+      borderRadius: 12,
+    },
+    playButtonOverlay: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'transparent', // Transparent - no black mask
+      justifyContent: 'center',
+      alignItems: 'center',
+      borderRadius: 12,
+    },
+    platformBadge: {
+      position: 'absolute',
+      top: 8,
+      right: 8,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      backgroundColor: 'rgba(0, 0, 0, 0.7)',
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 12,
+    },
+    platformBadgeText: {
+      color: colors.textPrimary,
+      fontSize: 11,
+      fontWeight: '600',
+    },
+    downloadButtonOverlay: {
+      position: 'absolute',
+      top: 8,
+      right: 8,
+      backgroundColor: '#FFFFFF',
+      borderRadius: 20,
+      width: 44,
+      height: 44,
+      justifyContent: 'center',
+      alignItems: 'center',
+      shadowColor: '#E80089',
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: 0.5,
+      shadowRadius: 8,
+      elevation: 10,
+      zIndex: 1000,
+      borderWidth: 2,
+      borderColor: '#E80089',
+    },
+    closeVideoButton: {
+      position: 'absolute',
+      top: 8,
+      right: 8,
+      backgroundColor: colors.danger,
+      borderRadius: 16,
+      width: 32,
+      height: 32,
+      justifyContent: 'center',
+      alignItems: 'center',
+      zIndex: 10,
+    },
+    actionsRow: {
+      flexDirection: 'row',
+      gap: 18,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+      paddingTop: 10,
+    },
+    action: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+    },
+    actionActive: {
+      opacity: 1,
+    },
+    actionText: {
+      color: colors.textSecondary,
+      fontWeight: '600',
+    },
+    actionTextActive: {
+      color: colors.textPrimary,
+      fontWeight: '700',
+    },
+    emptyState: {
+      alignItems: 'center',
+      marginTop: 40,
+      gap: 6,
+    },
+    emptyTitle: {
+      color: colors.textPrimary,
+      fontWeight: '700',
+    },
+    emptySubtitle: {
+      color: colors.textSecondary,
+      textAlign: 'center',
+    },
+    imageModalContainer: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.95)',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    imageModalBackdrop: {
+      flex: 1,
+      width: '100%',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    imageModalContent: {
+      width: Dimensions.get('window').width,
+      height: Dimensions.get('window').height,
+      justifyContent: 'center',
+      alignItems: 'center',
+      position: 'relative',
+    },
+    imageModalImage: {
+      width: Dimensions.get('window').width,
+      height: Dimensions.get('window').height,
+    },
+    imageModalCloseButton: {
+      position: 'absolute',
+      top: 40,
+      right: 20,
+      backgroundColor: 'rgba(0, 0, 0, 0.6)',
+      borderRadius: 20,
+      width: 40,
+      height: 40,
+      justifyContent: 'center',
+      alignItems: 'center',
+      zIndex: 10,
+    },
+    videoModalContainer: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.9)',
+      justifyContent: 'flex-end',
+    },
+    videoModalContent: {
+      backgroundColor: colors.card,
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+      padding: 16,
+      paddingBottom: 32,
+      maxHeight: '80%',
+    },
+    videoModalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      marginBottom: 16,
+      gap: 12,
+    },
+    videoModalTitle: {
+      flex: 1,
+      color: colors.textPrimary,
+      fontSize: 18,
+      fontWeight: '700',
+    },
+    videoModalCloseButton: {
+      backgroundColor: colors.surface,
+      borderRadius: 20,
+      width: 40,
+      height: 40,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    videoModalPlayer: {
+      borderRadius: 12,
+      overflow: 'hidden',
+      marginBottom: 16,
+      minHeight: 220,
+    },
+    externalVideoContainer: {
+      height: 220,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: colors.surface,
+      borderRadius: 12,
+      gap: 12,
+    },
+    externalVideoText: {
+      color: colors.textSecondary,
+      fontSize: 14,
+    },
+    externalVideoButton: {
+      backgroundColor: colors.primary,
+      paddingHorizontal: 20,
+      paddingVertical: 10,
+      borderRadius: 8,
+      marginTop: 8,
+    },
+    externalVideoButtonText: {
+      color: colors.textPrimary,
+      fontSize: 14,
+      fontWeight: '600',
+    },
+    videoModalSummary: {
+      paddingTop: 16,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+    },
+    videoModalSummaryText: {
+      color: colors.textSecondary,
+      fontSize: 14,
+      lineHeight: 20,
+    },
+    pollCard: {
+      backgroundColor: colors.card,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 18,
+      marginTop: 16,
+      gap: 12,
+    },
+    pollHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 12,
+    },
+    pollQuestion: {
+      color: colors.textPrimary,
+      fontSize: 16,
+      fontWeight: '700',
+      flex: 1,
+    },
+    pollStatus: {
+      color: colors.accent,
+      fontSize: 11,
+      fontWeight: '700',
+      textTransform: 'uppercase',
+    },
+    pollOptions: {
+      gap: 8,
+      marginBottom: 12,
+    },
+    pollOption: {
+      backgroundColor: colors.surface,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 12,
+    },
+    pollOptionSelected: {
+      borderColor: colors.primary,
+      backgroundColor: colors.primary + '15',
+    },
+    pollOptionHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 6,
+    },
+    pollOptionLabel: {
+      color: colors.textPrimary,
+      fontWeight: '600',
+      flex: 1,
+    },
+    pollOptionVotes: {
+      color: colors.textSecondary,
+      fontSize: 12,
+    },
+    pollProgressBar: {
+      height: 6,
+      borderRadius: 3,
+      backgroundColor: colors.border,
+      marginTop: 6,
+      overflow: 'hidden',
+    },
+    pollProgressTrack: {
+      height: 6,
+      borderRadius: 3,
+      backgroundColor: colors.border,
+      marginTop: 6,
+      overflow: 'hidden',
+    },
+    pollProgressFill: {
+      height: '100%',
+      backgroundColor: colors.primary,
+      borderRadius: 3,
+    },
+    pollOptionPercentage: {
+      color: colors.textSecondary,
+      fontSize: 11,
+      marginTop: 4,
+      fontWeight: '600',
+    },
+    pollVoteButton: {
+      backgroundColor: colors.primary,
+      borderRadius: 14,
+      paddingVertical: 14,
+      paddingHorizontal: 18,
+      alignItems: 'center',
+      marginTop: 8,
+      shadowColor: colors.primary,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 8,
+      elevation: 4,
+    },
+    pollVoteButtonDisabled: {
+      opacity: 0.6,
+    },
+    pollVoteButtonVoted: {
+      backgroundColor: colors.success,
+      shadowColor: colors.success,
+    },
+    pollVoteButtonText: {
+      color: colors.textPrimary,
+      fontWeight: '800',
+      fontSize: 15,
+      letterSpacing: -0.2,
+    },
+    pollVoteButtonTextVoted: {
+      color: colors.success,
+    },
+    chip: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 999,
+      paddingHorizontal: 12,
+      paddingVertical: 5,
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    chipActive: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    chipText: {
+      color: colors.textSecondary,
+      fontWeight: '600',
+    },
+    chipTextActive: {
+      color: colors.textPrimary,
+    },
+    addButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.primary,
+      borderRadius: 14,
+      paddingVertical: 14,
+      paddingHorizontal: 18,
+      gap: 8,
+      shadowColor: colors.primary,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 8,
+      elevation: 4,
+    },
+    addButtonText: {
+      color: colors.textPrimary,
+      fontWeight: '800',
+      fontSize: 15,
+      letterSpacing: -0.2,
+    },
+    assemblySegmentContainer: {
+      marginBottom: 12,
+      position: 'relative',
+      zIndex: 10,
+    },
+    assemblySegmentInputWrapper: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.surface,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: 12,
+      paddingVertical: 4,
+    },
+    assemblySegmentIcon: {
+      marginRight: 8,
+    },
+    assemblySegmentInput: {
+      flex: 1,
+      color: colors.textPrimary,
+      fontSize: 14,
+      paddingVertical: 10,
+    },
+    assemblySegmentDropdown: {
+      position: 'absolute',
+      top: '100%',
+      left: 0,
+      right: 0,
+      backgroundColor: colors.surface,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: colors.border,
+      marginTop: 4,
+      maxHeight: 200,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 3.84,
+      elevation: 5,
+    },
+    assemblySegmentDropdownList: {
+      maxHeight: 200,
+    },
+    assemblySegmentDropdownItem: {
+      padding: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    assemblySegmentDropdownItemText: {
+      fontSize: 14,
+      color: colors.textPrimary,
+    },
+    assemblySegmentClearButton: {
+      padding: 4,
+    },
+    // Note: The JSX content that was here has been moved to the return statement
+    // All style definitions above are complete
+  }), [colors]);
+
+  // JSX content starts here - this was moved from inside the styles definition
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.pageTitle}>Assembly Feed</Text>
@@ -798,67 +1732,95 @@ export const PostsScreen = (): React.ReactElement => {
       />
 
       <View style={styles.filterRow}>
-        <View style={styles.filterSection}>
-          <Text style={styles.filterLabel}>Filter:</Text>
-          <View style={styles.filterChipsContainer}>
-            <TouchableOpacity
-              style={[styles.chip, filter === 'All' && styles.chipActive]}
-              onPress={() => setFilter('All')}
-            >
-              <Text
-                style={[
-                  styles.chipText,
-                  filter === 'All' && styles.chipTextActive,
-                ]}
-              >
-                All
+        <TouchableOpacity
+          style={styles.filterHeader}
+          onPress={() => setFiltersExpanded(!filtersExpanded)}
+          activeOpacity={0.7}
+        >
+          <View style={styles.filterHeaderContent}>
+            <View style={styles.filterHeaderLabels}>
+              <Text style={styles.filterLabel}>
+                Filter: <Text style={styles.filterValue}>{filter}</Text>
               </Text>
-            </TouchableOpacity>
-            {CATEGORY_OPTIONS.map(option => (
-              <TouchableOpacity
-                key={option}
-                style={[styles.chip, filter === option && styles.chipActive]}
-                onPress={() => setFilter(option)}
-              >
-                <Text
-                  style={[
-                    styles.chipText,
-                    filter === option && styles.chipTextActive,
-                  ]}
-                >
-                  {option}
+              <Text style={styles.filterLabel}>
+                Order: <Text style={styles.filterValue}>
+                  {sortMode === 'latest' ? 'Latest' : 'Most Liked'}
                 </Text>
-              </TouchableOpacity>
-            ))}
+              </Text>
+            </View>
+            <MaterialIcons
+              name={filtersExpanded ? 'expand-less' : 'expand-more'}
+              size={24}
+              color={colors.textSecondary}
+            />
           </View>
-        </View>
-        <View style={styles.filterSection}>
-          <Text style={styles.filterLabel}>Order:</Text>
-          <View style={styles.filterChipsContainer}>
-            {[
-              { label: 'Latest', value: 'latest' as SortMode },
-              { label: 'Most Liked', value: 'mostLiked' as SortMode },
-            ].map(option => (
-              <TouchableOpacity
-                key={option.value}
-                style={[
-                  styles.chip,
-                  sortMode === option.value && styles.chipActive,
-                ]}
-                onPress={() => setSortMode(option.value)}
-              >
-                <Text
-                  style={[
-                    styles.chipText,
-                    sortMode === option.value && styles.chipTextActive,
-                  ]}
+        </TouchableOpacity>
+        
+        {filtersExpanded && (
+          <>
+            <View style={styles.filterSection}>
+              <Text style={styles.filterLabel}>Filter:</Text>
+              <View style={styles.filterChipsContainer}>
+                <TouchableOpacity
+                  style={[styles.chip, filter === 'All' && styles.chipActive]}
+                  onPress={() => setFilter('All')}
                 >
-                  {option.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
+                  <Text
+                    style={[
+                      styles.chipText,
+                      filter === 'All' && styles.chipTextActive,
+                    ]}
+                  >
+                    All
+                  </Text>
+                </TouchableOpacity>
+                {CATEGORY_OPTIONS.map(option => (
+                  <TouchableOpacity
+                    key={option}
+                    style={[styles.chip, filter === option && styles.chipActive]}
+                    onPress={() => setFilter(option)}
+                  >
+                    <Text
+                      style={[
+                        styles.chipText,
+                        filter === option && styles.chipTextActive,
+                      ]}
+                    >
+                      {option}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+            <View style={styles.filterSection}>
+              <Text style={styles.filterLabel}>Order:</Text>
+              <View style={styles.filterChipsContainer}>
+                {[
+                  { label: 'Latest', value: 'latest' as SortMode },
+                  { label: 'Most Liked', value: 'mostLiked' as SortMode },
+                ].map(option => (
+                  <TouchableOpacity
+                    key={option.value}
+                    style={[
+                      styles.chip,
+                      sortMode === option.value && styles.chipActive,
+                    ]}
+                    onPress={() => setSortMode(option.value)}
+                  >
+                    <Text
+                      style={[
+                        styles.chipText,
+                        sortMode === option.value && styles.chipTextActive,
+                      ]}
+                    >
+                      {option.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </>
+        )}
       </View>
 
       {/* Render Polls when filter is "Polls" */}
@@ -1020,9 +1982,28 @@ export const PostsScreen = (): React.ReactElement => {
                     </Text>
                   )}
                   <View style={styles.feedMeta}>
-                    <Text style={styles.feedAliasName}>
-                      Posted by {item.aliasName}
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
+                      <Text style={styles.feedAliasName}>
+                        Posted by{' '}
+                      </Text>
+                      <Text style={[styles.feedAliasName, { fontWeight: '800', color: colors.textPrimary }]}>
+                        {item.aliasName}
+                      </Text>
+                      {(() => {
+                        const userPoints = getUserPoints(item.aliasName);
+                        if (userPoints !== null && userPoints !== undefined) {
+                          return (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                              <Text style={[styles.feedAliasName, { fontWeight: '600' }]}>
+                                • Points: {userPoints.toLocaleString()}
+                              </Text>
+                              <UserBadge points={userPoints} size={16} />
+                            </View>
+                          );
+                        }
+                        return null;
+                      })()}
+                    </View>
                     <Text style={styles.feedTimestamp}>
                       {formatTimeAgo(item.createdAt)}
                     </Text>
@@ -1036,9 +2017,19 @@ export const PostsScreen = (): React.ReactElement => {
                   }
                 />
               </View>
-              <Text style={styles.feedSummary}>
-                {removeUrlsFromText(item.summary)}
-              </Text>
+              {(() => {
+                const twitterUrl = extractTwitterUrl(item);
+                const instagramUrl = extractInstagramUrl(item);
+                // Don't show summary text for Twitter or Instagram posts
+                if (!twitterUrl && !instagramUrl) {
+                  return (
+                    <Text style={styles.feedSummary}>
+                      {removeUrlsFromText(item.summary)}
+                    </Text>
+                  );
+                }
+                return null;
+              })()}
               
               {(() => {
                 const twitterUrl = extractTwitterUrl(item);
@@ -1051,6 +2042,13 @@ export const PostsScreen = (): React.ReactElement => {
                     <>
                       <View style={styles.twitterEmbedContainer}>
                         <TweetEmbed url={twitterUrl} height={400} />
+                        <TouchableOpacity
+                          style={[StyleSheet.absoluteFill, { backgroundColor: 'transparent' }]}
+                          onPress={() => Linking.openURL(twitterUrl).catch(() => {
+                            Alert.alert('Error', 'Unable to open Twitter link.');
+                          })}
+                          activeOpacity={1}
+                        />
                       </View>
                       {/* Platform button below media */}
                       <TouchableOpacity
@@ -1134,9 +2132,12 @@ export const PostsScreen = (): React.ReactElement => {
                 }
                 
                 if (instagramUrl) {
+                  // Try to get Instagram thumbnail URL, fallback to item.media
+                  const instagramThumbnail = buildInstagramThumbnail(instagramUrl);
+                  const thumbnailUri = instagramThumbnail || item.media;
+                  
                   // Show thumbnail with play button (Instagram embeds require login)
                   // Clicking opens Instagram in browser/app where public posts can be viewed without login
-                  // Use item.media which has a working fallback thumbnail from pickThumbnail
                   return (
                     <>
                       <TouchableOpacity
@@ -1149,23 +2150,16 @@ export const PostsScreen = (): React.ReactElement => {
                         }}
                       >
                         <Image
-                          source={{ uri: item.media }}
+                          source={{ uri: thumbnailUri }}
                           style={styles.videoThumbnailImage}
+                          resizeMode="cover"
                         />
-                        <View style={styles.playButtonOverlay}>
+                        <View style={[styles.playButtonOverlay, { backgroundColor: 'transparent' }]}>
                           <MaterialIcons
                             name="play-circle-filled"
                             size={64}
                             color={colors.textPrimary}
                           />
-                        </View>
-                        <View style={styles.platformBadge}>
-                          <MaterialIcons
-                            name="photo-camera"
-                            size={14}
-                            color={colors.textPrimary}
-                          />
-                          <Text style={styles.platformBadgeText}>Instagram</Text>
                         </View>
                       </TouchableOpacity>
                       {/* Platform button below media */}
@@ -1182,15 +2176,28 @@ export const PostsScreen = (): React.ReactElement => {
                   );
                 }
                 
-                // Regular image
+                // Regular image - add download button (not from social media since we've already checked above)
                 return (
                   item.media ? (
-                    <TouchableOpacity onPress={() => setSelectedImage(item.media)}>
-                      <Image
-                        source={{ uri: item.media }}
-                        style={styles.feedImage}
-                      />
-                    </TouchableOpacity>
+                    <View style={{ position: 'relative' }}>
+                      <TouchableOpacity onPress={() => setSelectedImage(item.media)}>
+                        <Image
+                          source={{ uri: item.media }}
+                          style={styles.feedImage}
+                        />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.downloadButtonOverlay}
+                        onPress={() => handleDownloadImage(item.media!, false)}
+                        activeOpacity={0.8}
+                      >
+                        <MaterialIcons
+                          name="download"
+                          size={24}
+                          color={colors.primary}
+                        />
+                      </TouchableOpacity>
+                    </View>
                   ) : null
                 );
               })()}
@@ -1266,6 +2273,23 @@ export const PostsScreen = (): React.ReactElement => {
                   />
                   <Text style={styles.actionText}>{item.shares}</Text>
                 </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.action,
+                    userBookmarks.has(item.id) && styles.actionActive,
+                  ]}
+                  onPress={() => handleToggleBookmark(item.id)}
+                >
+                  <MaterialIcons
+                    name={userBookmarks.has(item.id) ? 'bookmark' : 'bookmark-border'}
+                    size={18}
+                    color={
+                      userBookmarks.has(item.id)
+                        ? colors.primary
+                        : colors.textSecondary
+                    }
+                  />
+                </TouchableOpacity>
               </View>
             </View>
           ))
@@ -1282,9 +2306,28 @@ export const PostsScreen = (): React.ReactElement => {
                     </Text>
                   )}
                   <View style={styles.feedMeta}>
-                    <Text style={styles.feedAliasName}>
-                      Posted by {item.aliasName}
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
+                      <Text style={styles.feedAliasName}>
+                        Posted by{' '}
+                      </Text>
+                      <Text style={[styles.feedAliasName, { fontWeight: '800', color: colors.textPrimary }]}>
+                        {item.aliasName}
+                      </Text>
+                      {(() => {
+                        const userPoints = getUserPoints(item.aliasName);
+                        if (userPoints !== null && userPoints !== undefined) {
+                          return (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                              <Text style={[styles.feedAliasName, { fontWeight: '600' }]}>
+                                • Points: {userPoints.toLocaleString()}
+                              </Text>
+                              <UserBadge points={userPoints} size={16} />
+                            </View>
+                          );
+                        }
+                        return null;
+                      })()}
+                    </View>
                     <Text style={styles.feedTimestamp}>
                       {formatTimeAgo(item.createdAt)}
                     </Text>
@@ -1298,9 +2341,20 @@ export const PostsScreen = (): React.ReactElement => {
                   }
                 />
               </View>
-              <Text style={styles.feedSummary}>
-                {removeUrlsFromText(item.summary)}
-              </Text>
+              {(() => {
+                // Check if this is a Twitter or Instagram post - don't show summary text
+                const twitterUrl = extractTwitterUrl(item);
+                const instagramUrl = extractInstagramUrl(item);
+                // Don't show summary text for Twitter or Instagram posts
+                if (!twitterUrl && !instagramUrl) {
+                  return (
+                    <Text style={styles.feedSummary}>
+                      {removeUrlsFromText(item.summary)}
+                    </Text>
+                  );
+                }
+                return null;
+              })()}
               
               {(() => {
                 // Check if this is a Twitter post (from any category) - show embed
@@ -1311,6 +2365,13 @@ export const PostsScreen = (): React.ReactElement => {
                     <>
                       <View style={styles.twitterEmbedContainer}>
                         <TweetEmbed url={twitterUrl} height={400} />
+                        <TouchableOpacity
+                          style={[StyleSheet.absoluteFill, { backgroundColor: 'transparent' }]}
+                          onPress={() => Linking.openURL(twitterUrl).catch(() => {
+                            Alert.alert('Error', 'Unable to open Twitter link.');
+                          })}
+                          activeOpacity={1}
+                        />
                       </View>
                       {/* Platform button below media */}
                       <TouchableOpacity
@@ -1345,7 +2406,7 @@ export const PostsScreen = (): React.ReactElement => {
                           source={{ uri: item.media }}
                           style={styles.videoThumbnailImage}
                         />
-                        <View style={styles.playButtonOverlay}>
+                        <View style={[styles.playButtonOverlay, { backgroundColor: 'transparent' }]}>
                           <MaterialIcons
                             name="play-circle-filled"
                             size={64}
@@ -1385,9 +2446,12 @@ export const PostsScreen = (): React.ReactElement => {
                 // Instagram posts (can be in News or Videos category)
                 const instagramUrl = extractInstagramUrl(item);
                 if (instagramUrl) {
+                  // Try to get Instagram thumbnail URL, fallback to item.media
+                  const instagramThumbnail = buildInstagramThumbnail(instagramUrl);
+                  const thumbnailUri = instagramThumbnail || item.media;
+                  
                   // Show thumbnail with play button (Instagram embeds require login)
                   // Clicking opens Instagram in browser/app where public posts can be viewed without login
-                  // Use item.media which has a working fallback thumbnail from pickThumbnail
                   return (
                     <>
                       <TouchableOpacity
@@ -1400,23 +2464,16 @@ export const PostsScreen = (): React.ReactElement => {
                         }}
                       >
                         <Image
-                          source={{ uri: item.media }}
+                          source={{ uri: thumbnailUri }}
                           style={styles.videoThumbnailImage}
+                          resizeMode="cover"
                         />
-                        <View style={styles.playButtonOverlay}>
+                        <View style={[styles.playButtonOverlay, { backgroundColor: 'transparent' }]}>
                           <MaterialIcons
                             name="play-circle-filled"
                             size={64}
                             color={colors.textPrimary}
                           />
-                        </View>
-                        <View style={styles.platformBadge}>
-                          <MaterialIcons
-                            name="photo-camera"
-                            size={14}
-                            color={colors.textPrimary}
-                          />
-                          <Text style={styles.platformBadgeText}>Instagram</Text>
                         </View>
                       </TouchableOpacity>
                       {/* Platform button below media */}
@@ -1436,37 +2493,57 @@ export const PostsScreen = (): React.ReactElement => {
                 // Other videos (non-Instagram, non-YouTube, non-Twitter)
                 if (item.category === 'Videos' && item.videoUrl) {
                   const youtubeUrl = extractYouTubeUrl(item);
+                  const twitterUrl = extractTwitterUrl(item);
+                  const instagramUrl = extractInstagramUrl(item);
+                  
+                  // Only show download for regular videos (not from social media)
+                  const isSocialMediaVideo = !!(youtubeUrl || twitterUrl || instagramUrl);
                   
                   return (
                     <>
-                      <TouchableOpacity
-                        style={styles.videoThumbnail}
-                        onPress={() => {
-                          handleOpenExternalVideo(item.videoUrl!);
-                        }}
-                      >
-                        <Image
-                          source={{ uri: item.media }}
-                          style={styles.videoThumbnailImage}
-                        />
-                        <View style={styles.playButtonOverlay}>
-                          <MaterialIcons
-                            name="play-circle-filled"
-                            size={64}
-                            color={colors.textPrimary}
+                      <View style={{ position: 'relative' }}>
+                        <TouchableOpacity
+                          style={styles.videoThumbnail}
+                          onPress={() => {
+                            handleOpenExternalVideo(item.videoUrl!);
+                          }}
+                        >
+                          <Image
+                            source={{ uri: item.media }}
+                            style={styles.videoThumbnailImage}
                           />
-                        </View>
-                        {item.videoPlatform && (
-                          <View style={styles.platformBadge}>
+                          <View style={[styles.playButtonOverlay, { backgroundColor: 'transparent' }]}>
                             <MaterialIcons
-                              name={item.videoPlatform === 'YouTube' ? 'play-circle-outline' : item.videoPlatform === 'Twitter' ? 'tag' : 'photo-camera'}
-                              size={14}
+                              name="play-circle-filled"
+                              size={64}
                               color={colors.textPrimary}
                             />
-                            <Text style={styles.platformBadgeText}>{item.videoPlatform}</Text>
                           </View>
+                          {item.videoPlatform && (
+                            <View style={styles.platformBadge}>
+                              <MaterialIcons
+                                name={item.videoPlatform === 'YouTube' ? 'play-circle-outline' : item.videoPlatform === 'Twitter' ? 'tag' : 'photo-camera'}
+                                size={14}
+                                color={colors.textPrimary}
+                              />
+                              <Text style={styles.platformBadgeText}>{item.videoPlatform}</Text>
+                            </View>
+                          )}
+                        </TouchableOpacity>
+                        {!isSocialMediaVideo && item.media && (
+                          <TouchableOpacity
+                            style={styles.downloadButtonOverlay}
+                            onPress={() => handleDownloadImage(item.media!, true)}
+                            activeOpacity={0.8}
+                          >
+                            <MaterialIcons
+                              name="download"
+                              size={24}
+                              color={colors.primary}
+                            />
+                          </TouchableOpacity>
                         )}
-                      </TouchableOpacity>
+                      </View>
                       {/* Platform button below media */}
                       {youtubeUrl && (
                         <TouchableOpacity
@@ -1488,14 +2565,29 @@ export const PostsScreen = (): React.ReactElement => {
                   );
                 }
                 
-                // Regular image
+                // Regular image - add download button (not from social media since we've already checked above)
                 return (
-                  <TouchableOpacity onPress={() => setSelectedImage(item.media)}>
-                    <Image
-                      source={{ uri: item.media }}
-                      style={styles.feedImage}
-                    />
-                  </TouchableOpacity>
+                  item.media ? (
+                    <View style={{ position: 'relative' }}>
+                      <TouchableOpacity onPress={() => setSelectedImage(item.media)}>
+                        <Image
+                          source={{ uri: item.media }}
+                          style={styles.feedImage}
+                        />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.downloadButtonOverlay}
+                        onPress={() => handleDownloadImage(item.media!, false)}
+                        activeOpacity={0.8}
+                      >
+                        <MaterialIcons
+                          name="download"
+                          size={24}
+                          color={colors.primary}
+                        />
+                      </TouchableOpacity>
+                    </View>
+                  ) : null
                 );
               })()}
               <View style={styles.actionsRow}>
@@ -1559,6 +2651,23 @@ export const PostsScreen = (): React.ReactElement => {
                     name={item.videoId ? 'download' : 'share'}
                     size={18}
                     color={colors.textSecondary}
+                  />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.action,
+                    userBookmarks.has(item.id) && styles.actionActive,
+                  ]}
+                  onPress={() => handleToggleBookmark(item.id)}
+                >
+                  <MaterialIcons
+                    name={userBookmarks.has(item.id) ? 'bookmark' : 'bookmark-border'}
+                    size={18}
+                    color={
+                      userBookmarks.has(item.id)
+                        ? colors.primary
+                        : colors.textSecondary
+                    }
                   />
                 </TouchableOpacity>
               </View>
@@ -1744,791 +2853,3 @@ const handleOpenExternalVideo = (url: string) => {
     Alert.alert('Unable to open video link.');
   });
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  pageTitle: {
-    color: colors.textPrimary,
-    fontSize: 26,
-    fontWeight: '700',
-    marginTop: 20,
-  },
-  pageSubtitle: {
-    color: colors.textSecondary,
-    marginTop: 6,
-    marginBottom: 16,
-  },
-  content: {
-    padding: 24,
-    paddingBottom: 64,
-    gap: 16,
-  },
-  scopeRow: {
-    flexDirection: 'row',
-    gap: 10,
-    alignItems: 'stretch',
-    marginBottom: 16,
-  },
-  scopeTab: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.card,
-    minHeight: 44,
-  },
-  scopeTabActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  scopeLabel: {
-    color: colors.textSecondary,
-    fontWeight: '600',
-    fontSize: 13,
-    textAlign: 'center',
-  },
-  scopeLabelActive: {
-    color: colors.textPrimary,
-  },
-  filterRow: {
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 10,
-    gap: 10,
-  },
-  filterSection: {
-    gap: 6,
-  },
-  filterLabel: {
-    color: colors.textSecondary,
-    fontSize: 11,
-    fontWeight: '600',
-    marginBottom: 2,
-  },
-  filterChipsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  assemblySelectorContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-    gap: 8,
-  },
-  assemblySelectorButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    gap: 8,
-    minHeight: 44,
-  },
-  assemblySelectorIcon: {
-    marginRight: 4,
-  },
-  assemblySelectorText: {
-    flex: 1,
-    color: colors.textPrimary,
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  clearAssemblyButton: {
-    padding: 8,
-    borderRadius: 8,
-    backgroundColor: colors.surface,
-  },
-  assemblyDropdownContainer: {
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: 16,
-    maxHeight: 300,
-    overflow: 'hidden',
-  },
-  assemblySearchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    margin: 12,
-    gap: 8,
-  },
-  assemblySearchIcon: {
-    marginRight: 4,
-  },
-  assemblySearchInput: {
-    flex: 1,
-    color: colors.textPrimary,
-    fontSize: 14,
-    paddingVertical: 4,
-  },
-  assemblyDropdownList: {
-    maxHeight: 250,
-  },
-  assemblyDropdownItem: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  assemblyDropdownItemActive: {
-    backgroundColor: colors.primary + '20',
-  },
-  assemblyDropdownItemText: {
-    color: colors.textPrimary,
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  assemblyDropdownItemTextActive: {
-    color: colors.primary,
-    fontWeight: '600',
-  },
-  createFeedButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    backgroundColor: colors.primary,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.primary,
-    minHeight: 44,
-  },
-  createFeedButtonText: {
-    color: colors.textPrimary,
-    fontWeight: '600',
-    fontSize: 13,
-    textAlign: 'center',
-  },
-  composerCard: {
-    backgroundColor: colors.card,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 16,
-    gap: 12,
-    marginTop: 12,
-  },
-  composerHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  composerTitle: {
-    color: colors.textPrimary,
-    fontWeight: '700',
-    fontSize: 16,
-  },
-  mediaButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingVertical: 12,
-    gap: 8,
-  },
-  mediaButtonText: {
-    color: colors.textPrimary,
-    fontWeight: '600',
-  },
-  mediaPreview: {
-    marginTop: 4,
-  },
-  imagePreviewContainer: {
-    position: 'relative',
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  mediaPreviewImage: {
-    width: '100%',
-    height: 200,
-    borderRadius: 12,
-  },
-  videoPreview: {
-    width: '100%',
-    height: 200,
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'relative',
-  },
-  mediaPreviewText: {
-    color: colors.textSecondary,
-    marginTop: 8,
-    fontSize: 12,
-  },
-  removeMediaButton: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    backgroundColor: colors.danger,
-    borderRadius: 12,
-    width: 24,
-    height: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  mediaInputContainer: {
-    gap: 8,
-  },
-  mediaInputLabel: {
-    color: colors.textSecondary,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  mediaInputActions: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  mediaInputButton: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  mediaInputButtonCancel: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  mediaInputButtonSave: {
-    backgroundColor: colors.primary,
-  },
-  mediaInputButtonText: {
-    color: colors.textPrimary,
-    fontWeight: '600',
-  },
-  input: {
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 12,
-    color: colors.textPrimary,
-  },
-  inputMultiline: {
-    minHeight: 80,
-    textAlignVertical: 'top',
-  },
-  chipGroup: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  chip: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  chipActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  chipText: {
-    color: colors.textSecondary,
-    fontWeight: '600',
-  },
-  chipTextActive: {
-    color: colors.textPrimary,
-  },
-  addButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.primary,
-    borderRadius: 12,
-    paddingVertical: 12,
-    gap: 8,
-  },
-  addButtonText: {
-    color: colors.textPrimary,
-    fontWeight: '700',
-  },
-  assemblySegmentContainer: {
-    marginBottom: 12,
-    position: 'relative',
-    zIndex: 10,
-  },
-  assemblySegmentInputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-  },
-  assemblySegmentIcon: {
-    marginRight: 8,
-  },
-  assemblySegmentInput: {
-    flex: 1,
-    color: colors.textPrimary,
-    fontSize: 14,
-    paddingVertical: 10,
-  },
-  assemblySegmentDropdown: {
-    position: 'absolute',
-    top: '100%',
-    left: 0,
-    right: 0,
-    backgroundColor: colors.surface,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginTop: 4,
-    maxHeight: 200,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  assemblySegmentDropdownList: {
-    maxHeight: 200,
-  },
-  assemblySegmentDropdownItem: {
-    padding: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  assemblySegmentDropdownItemText: {
-    fontSize: 14,
-    color: colors.textPrimary,
-  },
-  assemblySegmentClearButton: {
-    padding: 4,
-  },
-  feedCard: {
-    backgroundColor: colors.card,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 16,
-    marginTop: 12,
-    gap: 12,
-  },
-  feedHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  feedCategory: {
-    color: colors.accent,
-    fontWeight: '700',
-    fontSize: 12,
-    textTransform: 'uppercase',
-  },
-  feedTitle: {
-    color: colors.textPrimary,
-    fontSize: 16,
-    fontWeight: '700',
-    marginTop: 4,
-  },
-  feedAssemblySegment: {
-    color: colors.textSecondary,
-    fontSize: 12,
-    marginTop: 4,
-    fontWeight: '500',
-  },
-  feedMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 6,
-  },
-  feedAliasName: {
-    color: colors.textSecondary,
-    fontSize: 11,
-    fontWeight: '500',
-  },
-  feedTimestamp: {
-    color: colors.textSecondary,
-    fontSize: 11,
-    fontWeight: '400',
-  },
-  feedSummary: {
-    color: colors.textSecondary,
-  },
-  twitterEmbedContainer: {
-    marginVertical: 8,
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  platformButtonsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginVertical: 8,
-  },
-  platformButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  twitterButton: {
-    backgroundColor: '#1DA1F2',
-    borderColor: '#1DA1F2',
-  },
-  youtubeButton: {
-    backgroundColor: '#FF0000',
-    borderColor: '#FF0000',
-  },
-  instagramButton: {
-    backgroundColor: '#E4405F',
-    borderColor: '#E4405F',
-  },
-  platformButtonText: {
-    color: colors.textPrimary,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  feedImage: {
-    width: '100%',
-    height: 150,
-    borderRadius: 12,
-  },
-  videoContainer: {
-    position: 'relative',
-    width: '100%',
-    borderRadius: 12,
-    overflow: 'hidden',
-    marginBottom: 4,
-  },
-  videoThumbnail: {
-    position: 'relative',
-    width: '100%',
-    height: 200,
-  },
-  videoThumbnailImage: {
-    width: '100%',
-    height: 200,
-    borderRadius: 12,
-  },
-  playButtonOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 12,
-  },
-  platformBadge: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  platformBadgeText: {
-    color: colors.textPrimary,
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  closeVideoButton: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    backgroundColor: colors.danger,
-    borderRadius: 16,
-    width: 32,
-    height: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 10,
-  },
-  actionsRow: {
-    flexDirection: 'row',
-    gap: 18,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    paddingTop: 10,
-  },
-  action: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  actionActive: {
-    opacity: 1,
-  },
-  actionText: {
-    color: colors.textSecondary,
-    fontWeight: '600',
-  },
-  actionTextActive: {
-    color: colors.textPrimary,
-    fontWeight: '700',
-  },
-  emptyState: {
-    alignItems: 'center',
-    marginTop: 40,
-    gap: 6,
-  },
-  emptyTitle: {
-    color: colors.textPrimary,
-    fontWeight: '700',
-  },
-  emptySubtitle: {
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
-  // Image Modal Styles
-  imageModalContainer: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.95)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  imageModalBackdrop: {
-    flex: 1,
-    width: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  imageModalContent: {
-    width: Dimensions.get('window').width,
-    height: Dimensions.get('window').height,
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'relative',
-  },
-  imageModalImage: {
-    width: Dimensions.get('window').width,
-    height: Dimensions.get('window').height,
-  },
-  imageModalCloseButton: {
-    position: 'absolute',
-    top: 40,
-    right: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    borderRadius: 20,
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 10,
-  },
-  // Video Modal Styles
-  videoModalContainer: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.9)',
-    justifyContent: 'flex-end',
-  },
-  videoModalContent: {
-    backgroundColor: colors.card,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 16,
-    paddingBottom: 32,
-    maxHeight: '80%',
-  },
-  videoModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 16,
-    gap: 12,
-  },
-  videoModalTitle: {
-    flex: 1,
-    color: colors.textPrimary,
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  videoModalCloseButton: {
-    backgroundColor: colors.surface,
-    borderRadius: 20,
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  videoModalPlayer: {
-    borderRadius: 12,
-    overflow: 'hidden',
-    marginBottom: 16,
-    minHeight: 220,
-  },
-  externalVideoContainer: {
-    height: 220,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    gap: 12,
-  },
-  externalVideoText: {
-    color: colors.textSecondary,
-    fontSize: 14,
-  },
-  externalVideoButton: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
-    marginTop: 8,
-  },
-  externalVideoButtonText: {
-    color: colors.textPrimary,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  videoModalSummary: {
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  videoModalSummaryText: {
-    color: colors.textSecondary,
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  // Poll Styles (used when filter is "Polls")
-  pollCard: {
-    backgroundColor: colors.card,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 18,
-    marginTop: 16,
-    gap: 12,
-  },
-  pollHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  pollStatus: {
-    color: colors.accent,
-    fontWeight: '700',
-    fontSize: 13,
-  },
-  pollVotes: {
-    color: colors.textSecondary,
-    fontSize: 12,
-  },
-  pollQuestion: {
-    color: colors.textPrimary,
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 8,
-  },
-  pollOption: {
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: 8,
-  },
-  pollOptionSelected: {
-    borderColor: colors.primary,
-    borderWidth: 2,
-  },
-  pollOptionDisabled: {
-    opacity: 0.6,
-  },
-  pollOptionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  pollOptionLabel: {
-    color: colors.textPrimary,
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  pollOptionVotes: {
-    color: colors.textSecondary,
-    fontSize: 12,
-  },
-  pollProgressTrack: {
-    height: 8,
-    backgroundColor: colors.border,
-    borderRadius: 999,
-    overflow: 'hidden',
-    marginBottom: 6,
-  },
-  pollProgressFill: {
-    height: '100%',
-    backgroundColor: colors.primary,
-    borderRadius: 999,
-  },
-  pollOptionPercentage: {
-    color: colors.textSecondary,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  pollVoteButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: colors.primary,
-    borderRadius: 12,
-    paddingVertical: 12,
-    marginTop: 4,
-  },
-  pollVoteButtonDisabled: {
-    opacity: 0.6,
-  },
-  pollVoteButtonVoted: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.success,
-  },
-  pollVoteButtonText: {
-    color: colors.textPrimary,
-    fontWeight: '700',
-    fontSize: 15,
-  },
-  pollVoteButtonTextVoted: {
-    color: colors.success,
-  },
-});

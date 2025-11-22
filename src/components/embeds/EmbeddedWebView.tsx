@@ -29,11 +29,12 @@ export const EmbeddedWebView = ({
 				thirdPartyCookiesEnabled
 				javaScriptEnabled
 				domStorageEnabled
-				scrollEnabled
+				scrollEnabled={false}
 				setSupportMultipleWindows={false}
 				userAgent={userAgent}
 				source={source}
 				style={styles.webview}
+				pointerEvents="none"
 			/>
 		</View>
 	);

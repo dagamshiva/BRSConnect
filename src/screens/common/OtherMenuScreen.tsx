@@ -33,6 +33,14 @@ export const OtherMenuScreen = (): React.ReactElement => {
 
   const getMenuItems = (): OtherMenuItem[] => {
     const items: OtherMenuItem[] = [
+      // Bookmarks - available to all users
+      {
+        id: 'bookmarks',
+        title: 'My Bookmarks',
+        icon: 'bookmark',
+        route: 'Bookmarks',
+        color: colors.primary,
+      },
       // Alerts viewing is available to all users
       {
         id: 'alerts-view',
@@ -40,6 +48,14 @@ export const OtherMenuScreen = (): React.ReactElement => {
         icon: 'notifications',
         route: 'AlertsView',
         color: colors.info,
+      },
+      // Post your view on assembly segment - available to all users
+      {
+        id: 'post-assembly-view',
+        title: 'Post Your View on Assembly Segment',
+        icon: 'rate-review',
+        route: 'PostAssemblyView',
+        color: colors.accent,
       },
     ];
     if (isLocalAdmin || isSuperAdmin) {
@@ -128,6 +144,8 @@ export const OtherMenuScreen = (): React.ReactElement => {
       ApprovalUsers: 'ApprovalUsers',
       SendMessageToSegmentAdmins: 'SendMessageToSegmentAdmins',
       ShowUserDetails: 'ShowUserDetails',
+      PostAssemblyView: 'PostAssemblyView',
+      Bookmarks: 'Bookmarks',
     };
 
     const routeName = routeMap[route] || route;
@@ -168,13 +186,14 @@ export const OtherMenuScreen = (): React.ReactElement => {
         {menuItems.map(item => (
           <TouchableOpacity
             key={item.id}
-            style={styles.menuCard}
+            style={styles.menuItem}
             onPress={() => handleNavigate(item.route)}
+            activeOpacity={0.7}
           >
             <View
               style={[
                 styles.iconContainer,
-                { backgroundColor: `${item.color}20` },
+                { backgroundColor: `${item.color}15` },
               ]}
             >
               <MaterialIcons
@@ -183,7 +202,9 @@ export const OtherMenuScreen = (): React.ReactElement => {
                 color={item.color}
               />
             </View>
-            <Text style={styles.menuTitle}>{item.title}</Text>
+            <Text style={styles.menuTitle} numberOfLines={2}>
+              {item.title}
+            </Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -205,29 +226,30 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 28,
-    fontWeight: '700',
+    fontWeight: '800',
     color: colors.textPrimary,
     marginBottom: 4,
+    letterSpacing: -0.5,
   },
   headerSubtitle: {
     fontSize: 14,
     color: colors.textSecondary,
+    fontWeight: '600',
+    letterSpacing: -0.2,
   },
   menuGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    gap: 6,
+    justifyContent: 'space-between',
   },
-  menuCard: {
-    width: '47%',
-    backgroundColor: colors.card,
-    borderRadius: 16,
-    padding: 20,
+  menuItem: {
+    width: '31%',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-    minHeight: 120,
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
+    paddingVertical: 14,
+    paddingHorizontal: 6,
+    minHeight: 90,
   },
   iconContainer: {
     width: 64,
@@ -235,12 +257,15 @@ const styles = StyleSheet.create({
     borderRadius: 32,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
+    backgroundColor: colors.surface,
   },
   menuTitle: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 10,
+    fontWeight: '700',
     color: colors.textPrimary,
     textAlign: 'center',
+    letterSpacing: -0.1,
+    lineHeight: 13,
   },
 });

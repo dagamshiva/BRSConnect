@@ -1,61 +1,98 @@
 /**
- * Icon Generation Helper Script
+ * Script to generate Android app icons from brs-logo.png
  * 
- * This script provides instructions for generating app icons.
- * Run: node scripts/generate-icons.js
+ * This script generates all required icon sizes for Android launcher icons
+ * from the source BRS logo image.
+ * 
+ * Required sizes:
+ * - mdpi: 48x48
+ * - hdpi: 72x72
+ * - xhdpi: 96x96
+ * - xxhdpi: 144x144
+ * - xxxhdpi: 192x192
+ * 
+ * Usage: node scripts/generate-icons.js
  */
 
 const fs = require('fs');
 const path = require('path');
 
-console.log('📱 BRSConnect App Icon Setup\n');
-console.log('This script helps you understand the icon requirements.\n');
+// Try to use sharp if available, otherwise provide instructions
+let sharp;
+try {
+  sharp = require('sharp');
+} catch (e) {
+  console.error('❌ Error: sharp package is required to generate icons.');
+  console.error('   Please install it first: npm install --save-dev sharp');
+  console.error('\n   Or use an online icon generator:');
+  console.error('   https://romannurik.github.io/AndroidAssetStudio/icons-launcher.html');
+  process.exit(1);
+}
 
-const androidSizes = [
-  { folder: 'mipmap-mdpi', size: 48 },
-  { folder: 'mipmap-hdpi', size: 72 },
-  { folder: 'mipmap-xhdpi', size: 96 },
-  { folder: 'mipmap-xxhdpi', size: 144 },
-  { folder: 'mipmap-xxxhdpi', size: 192 },
-];
+const sourceLogo = path.join(__dirname, '../src/assets/brs-logo.png');
+const androidResPath = path.join(__dirname, '../android/app/src/main/res');
 
-const ioSizes = [
-  { name: '20x20@2x', size: 40 },
-  { name: '20x20@3x', size: 60 },
-  { name: '29x29@2x', size: 58 },
-  { name: '29x29@3x', size: 87 },
-  { name: '40x40@2x', size: 80 },
-  { name: '40x40@3x', size: 120 },
-  { name: '60x60@2x', size: 120 },
-  { name: '60x60@3x', size: 180 },
-  { name: '1024x1024', size: 1024 },
-];
+// Icon sizes for different densities
+const iconSizes = {
+  'mipmap-mdpi': 48,
+  'mipmap-hdpi': 72,
+  'mipmap-xhdpi': 96,
+  'mipmap-xxhdpi': 144,
+  'mipmap-xxxhdpi': 192,
+};
 
-console.log('📦 Android Icon Requirements:');
-console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
-androidSizes.forEach(({ folder, size }) => {
-  const exists = fs.existsSync(path.join(__dirname, '..', 'android', 'app', 'src', 'main', 'res', folder));
-  const status = exists ? '✓' : '✗';
-  console.log(`  ${status} ${folder.padEnd(20)} ${size}x${size} px`);
-});
-console.log('\n  Location: android/app/src/main/res/mipmap-*/');
-console.log('  Files needed: ic_launcher.png, ic_launcher_round.png\n');
+async function generateIcons() {
+  try {
+    // Check if source logo exists
+    if (!fs.existsSync(sourceLogo)) {
+      console.error(`❌ Error: Source logo not found at ${sourceLogo}`);
+      process.exit(1);
+    }
 
-console.log('🍎 iOS Icon Requirements:');
-console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
-ioSizes.forEach(({ name, size }) => {
-  console.log(`  • ${name.padEnd(15)} ${size}x${size} px`);
-});
-console.log('\n  Location: ios/BRSConnect/Images.xcassets/AppIcon.appiconset/\n');
+    console.log('🔄 Generating Android app icons from BRS logo...\n');
 
-console.log('🚀 Quick Start:');
-console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
-console.log('1. Get your BRSConnect logo (1024x1024 px recommended)');
-console.log('2. Use an online tool: https://www.appicon.co/');
-console.log('3. Upload your logo and download the generated icons');
-console.log('4. Copy Android icons to: android/app/src/main/res/mipmap-*/');
-console.log('5. Copy iOS icons to: ios/BRSConnect/Images.xcassets/AppIcon.appiconset/');
-console.log('6. Rebuild your app\n');
+    // Generate icons for each density
+    for (const [density, size] of Object.entries(iconSizes)) {
+      const densityPath = path.join(androidResPath, density);
+      
+      // Ensure directory exists
+      if (!fs.existsSync(densityPath)) {
+        fs.mkdirSync(densityPath, { recursive: true });
+      }
 
-console.log('📝 See APP_ICON_SETUP.md for detailed instructions.\n');
+      // Generate regular icon
+      const regularIconPath = path.join(densityPath, 'ic_launcher.png');
+      await sharp(sourceLogo)
+        .resize(size, size, {
+          fit: 'contain',
+          background: { r: 0, g: 0, b: 0, alpha: 0 }, // Transparent background
+        })
+        .toFile(regularIconPath);
+      
+      console.log(`✅ Generated ${density}/ic_launcher.png (${size}x${size})`);
 
+      // Generate round icon (same size, will be clipped by Android)
+      const roundIconPath = path.join(densityPath, 'ic_launcher_round.png');
+      await sharp(sourceLogo)
+        .resize(size, size, {
+          fit: 'contain',
+          background: { r: 0, g: 0, b: 0, alpha: 0 }, // Transparent background
+        })
+        .toFile(roundIconPath);
+      
+      console.log(`✅ Generated ${density}/ic_launcher_round.png (${size}x${size})`);
+    }
+
+    console.log('\n✨ All Android app icons generated successfully!');
+    console.log('\n📱 Next steps:');
+    console.log('   1. Clean and rebuild your Android app');
+    console.log('   2. Run: cd android && ./gradlew clean && cd ..');
+    console.log('   3. Run: npm run android');
+    
+  } catch (error) {
+    console.error('❌ Error generating icons:', error.message);
+    process.exit(1);
+  }
+}
+
+generateIcons();

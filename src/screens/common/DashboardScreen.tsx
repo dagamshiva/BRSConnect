@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import {
   ScrollView,
   StyleSheet,
@@ -7,13 +7,27 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useAppSelector } from '../../store/hooks';
-import { selectIsSuperAdmin, selectAuth } from '../../store/slices/authSlice';
+import {
+  selectIsSuperAdmin,
+  selectIsLocalAdmin,
+  selectAuth,
+} from '../../store/slices/authSlice';
 
-import { colors } from '../../theme/colors';
+import { useTheme } from '../../theme/useTheme';
+import type { ThemeColors } from '../../theme/themeColors';
 import { AssemblySelector } from '../../components/AssemblySelector';
+import { GaugeChart } from '../../components/GaugeChart';
+import { PieChart } from '../../components/PieChart';
+import { UserDetailsHeader } from '../../components/UserDetailsHeader';
+import { UserBadge } from '../../components/UserBadge';
 import { mockFeed } from '../../../mocks/mock_feed';
 import { telanganaUsers } from '../../../mocks/telangana_user';
+import {
+  getPartyDistribution,
+  getBRSSatisfactionPercentage,
+} from '../../../mocks/mock_myassembly_view';
 
 interface MetricCard {
   id: string;
@@ -21,6 +35,7 @@ interface MetricCard {
   value: string;
   icon: string;
   color: string;
+  screenName?: string;
 }
 
 interface SuggestionItem {
@@ -34,24 +49,168 @@ interface SuggestionItem {
   postedAt: string;
 }
 
+// Separate component for Assembly Mood Charts to ensure proper recalculation
+const AssemblyMoodCharts = ({
+  refreshKey,
+  selectedAssembly,
+  userAssemblySegment,
+  isSuperAdmin,
+  showMyAssemblyOnly,
+  colors,
+}: {
+  refreshKey: number;
+  selectedAssembly: string | null;
+  userAssemblySegment: string | null;
+  isSuperAdmin: boolean;
+  showMyAssemblyOnly: boolean;
+  colors: ThemeColors;
+}): React.ReactElement => {
+  // Determine which assembly segment to use for charts
+  // For SuperAdmin: Priority: selected assembly > My Assembly toggle > All segments
+  // For LocalAdmin/Member: Always use their own assembly segment
+  let assemblySegment: string | null = null;
+
+  if (!isSuperAdmin && userAssemblySegment) {
+    // For LocalAdmin and Member: always use their own assembly segment
+    assemblySegment = userAssemblySegment;
+  } else if (isSuperAdmin && selectedAssembly) {
+    // SuperAdmin's selected assembly takes priority
+    assemblySegment = selectedAssembly;
+  } else if (showMyAssemblyOnly && userAssemblySegment) {
+    // "My Assembly" toggle is active, filter to user's segment
+    assemblySegment = userAssemblySegment;
+  } else {
+    // Default: show all segments (null) - only for SuperAdmin
+    assemblySegment = null;
+  }
+
+  // Memoize chart data to recalculate when refreshKey or assemblySegment changes
+  const brsSatisfactionPercentage = useMemo(
+    () => getBRSSatisfactionPercentage(assemblySegment),
+    [assemblySegment, refreshKey],
+  );
+
+  const partyDistributionData = useMemo(
+    () =>
+      getPartyDistribution(assemblySegment).map(item => ({
+        label: item.party,
+        value: item.count,
+        color:
+          item.party === 'BRS'
+            ? colors.primary
+            : item.party === 'Congress'
+            ? '#00529B'
+            : item.party === 'BJP'
+            ? '#FF9933'
+            : colors.textSecondary,
+      })),
+    [assemblySegment, refreshKey, colors.primary, colors.textSecondary],
+  );
+
+  const chartStyles = useMemo(
+    () =>
+      StyleSheet.create({
+        chartsContainer: {
+          flexDirection: 'row',
+          gap: 12,
+          marginTop: 12,
+        },
+        chartCard: {
+          flex: 1,
+          backgroundColor: colors.card,
+          borderRadius: 16,
+          padding: 16,
+          borderWidth: 1.5,
+          borderColor: `${colors.primary}40`,
+          shadowColor: colors.primary,
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.1,
+          shadowRadius: 8,
+          elevation: 3,
+        },
+      }),
+    [colors],
+  );
+
+  return (
+    <View style={chartStyles.chartsContainer}>
+      {/* BRS Satisfaction Gauge */}
+      <View style={chartStyles.chartCard}>
+        <GaugeChart
+          key={`gauge-${refreshKey}-${assemblySegment}`}
+          percentage={brsSatisfactionPercentage}
+          title="BRS Satisfaction"
+          size={180}
+        />
+      </View>
+
+      {/* Party Preference Pie Chart */}
+      <View style={chartStyles.chartCard}>
+        <PieChart
+          key={`pie-${refreshKey}-${assemblySegment}`}
+          data={partyDistributionData}
+          title="Party Preference"
+          size={180}
+        />
+      </View>
+    </View>
+  );
+};
+
 export const DashboardScreen = (): React.ReactElement => {
-  const [selectedAssembly, setSelectedAssembly] = useState<string | null>(null);
-  const isSuperAdmin = useAppSelector(selectIsSuperAdmin);
   const { user } = useAppSelector(selectAuth);
+  const isSuperAdmin = useAppSelector(selectIsSuperAdmin);
+  const isLocalAdmin = useAppSelector(selectIsLocalAdmin);
+
+  // For LocalAdmin and Member: default to their own assembly segment
+  // For SuperAdmin: start with null (can select any assembly)
+  const defaultAssembly =
+    !isSuperAdmin && user?.assignedAreas?.assemblySegment
+      ? user.assignedAreas.assemblySegment
+      : null;
+
+  const [selectedAssembly, setSelectedAssembly] = useState<string | null>(
+    defaultAssembly,
+  );
+  const [showMyAssemblyOnly, setShowMyAssemblyOnly] = useState<boolean>(false); // For Assembly Mood filter
+  const [refreshKey, setRefreshKey] = useState(0); // Force re-render when votes change
+  const navigation = useNavigation<any>();
+  const colors = useTheme(); // Define colors early so it can be used in useMemo hooks
+
+  // Set default assembly for LocalAdmin and Member when user data is available
+  React.useEffect(() => {
+    if (!isSuperAdmin && user?.assignedAreas?.assemblySegment) {
+      // For LocalAdmin and Member: set their assembly as default
+      if (selectedAssembly !== user.assignedAreas.assemblySegment) {
+        setSelectedAssembly(user.assignedAreas.assemblySegment);
+      }
+    }
+  }, [user?.assignedAreas?.assemblySegment, isSuperAdmin]);
+
+  // Refresh dashboard when screen comes into focus (e.g., after voting)
+  useFocusEffect(
+    useCallback(() => {
+      // Increment refreshKey to force recalculation of charts
+      setRefreshKey(prev => prev + 1);
+    }, []),
+  );
 
   // Calculate comprehensive metrics based on selected assembly (for SuperAdmin) or user's assembly
   const metrics = useMemo(() => {
+    // Determine the user's role for navigation
+    const userRole = isSuperAdmin
+      ? 'superAdmin'
+      : isLocalAdmin
+      ? 'localAdmin'
+      : 'member';
     // For SuperAdmin: filter by selected assembly or show all
-    // For LocalAdmin: filter by their assigned assembly segment
-    // For others: show all data
+    // For LocalAdmin and Member: filter by their assigned assembly segment
     let assemblyFilter: string | null = null;
 
     if (isSuperAdmin) {
       assemblyFilter = selectedAssembly;
-    } else if (
-      user?.role === 'LocalAdmin' &&
-      user?.assignedAreas?.assemblySegment
-    ) {
+    } else if (user?.assignedAreas?.assemblySegment) {
+      // For LocalAdmin and Member: always use their own assembly segment
       assemblyFilter = user.assignedAreas.assemblySegment;
     }
 
@@ -243,6 +402,20 @@ export const DashboardScreen = (): React.ReactElement => {
           suggestionPosts.length
         : 0;
 
+    // Fake news today (last 24 hours)
+    const fakeNewsToday = fakeNewsPosts.filter(item => {
+      try {
+        const postDate = new Date(item.postedAt);
+        if (isNaN(postDate.getTime())) return false;
+        // Check if post is from last 24 hours
+        const hoursDiff =
+          (now.getTime() - postDate.getTime()) / (1000 * 60 * 60);
+        return hoursDiff <= 24 && hoursDiff >= 0;
+      } catch {
+        return false;
+      }
+    });
+
     // Fake news resolution rate
     const fakeNewsResolutionRate =
       fakeNewsPosts.length > 0
@@ -253,97 +426,314 @@ export const DashboardScreen = (): React.ReactElement => {
     const avgPollVotes =
       pollPosts.length > 0 ? totalPollVotes / pollPosts.length : 0;
 
-    return [
-      // Most Important 9 Metrics
-      {
-        id: 'm1',
-        label: 'Total Users',
-        value: totalUsers.toLocaleString(),
-        icon: 'people',
-        color: colors.primary,
-      },
-      {
-        id: 'm2',
-        label: 'Active Volunteers',
-        value: activeUsers.length.toLocaleString(),
-        icon: 'person-check',
-        color: colors.success,
-      },
-      {
-        id: 'm3',
-        label: 'Total Posts',
-        value: totalPosts.toLocaleString(),
-        icon: 'post-add',
-        color: colors.success,
-      },
-      {
-        id: 'm4',
-        label: 'Posts Today',
-        value: postsToday.length.toLocaleString(),
-        icon: 'today',
-        color: colors.primary,
-      },
-      {
-        id: 'm5',
-        label: 'Total Engagement',
-        value: totalEngagement.toLocaleString(),
-        icon: 'trending-up',
-        color: colors.primary,
-      },
-      {
-        id: 'm6',
-        label: 'Active Polls',
-        value: activePolls.length.toLocaleString(),
-        icon: 'how-to-vote',
-        color: colors.accent,
-      },
-      {
-        id: 'm7',
-        label: 'Fake News Reports',
-        value: fakeNewsPosts.length.toLocaleString(),
-        icon: 'report-problem',
-        color: colors.warning,
-      },
-      {
-        id: 'm8',
-        label: 'Resolved Reports',
-        value: resolvedReports.length.toLocaleString(),
-        icon: 'check-circle',
-        color: colors.success,
-      },
-      {
-        id: 'm9',
-        label: 'Content Creators',
-        value: uniqueCreators.size.toLocaleString(),
-        icon: 'create',
-        color: colors.info,
-      },
-    ];
-  }, [selectedAssembly, isSuperAdmin, user]) as MetricCard[];
+    // Return totalUsers separately and exclude it from metrics array
+    return {
+      totalUsers,
+      metrics: [
+        {
+          id: 'm4',
+          label: 'Today Posts',
+          value: postsToday.length.toLocaleString(),
+          icon: 'today',
+          color: colors.primary,
+          screenName: `${userRole}-Posts`,
+        },
+        {
+          id: 'm6',
+          label: 'Today Polls',
+          value: activePolls.length.toLocaleString(),
+          icon: 'how-to-vote',
+          color: colors.accent,
+          screenName: `${userRole}-Polls`,
+        },
+        {
+          id: 'm7',
+          label: 'Today Fake News',
+          value: fakeNewsToday.length.toLocaleString(),
+          icon: 'report-problem',
+          color: colors.warning,
+          screenName: `${userRole}-FakeNews`,
+        },
+      ],
+    };
+  }, [selectedAssembly, isSuperAdmin, isLocalAdmin, user, colors]) as {
+    totalUsers: number;
+    metrics: MetricCard[];
+  };
 
-  // Get top 3 suggestions sorted by likes
+  // Create dynamic styles based on current theme with modern design
+  const styles = useMemo(
+    () =>
+      StyleSheet.create({
+        container: {
+          flex: 1,
+          backgroundColor: colors.background,
+        },
+        content: {
+          padding: 20,
+          paddingBottom: 32,
+        },
+        header: {
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          marginTop: 8,
+          marginBottom: 24,
+        },
+        headerLeft: {
+          flex: 1,
+        },
+        headerTitle: {
+          fontSize: 32,
+          fontWeight: '800',
+          color: colors.textPrimary,
+          marginBottom: 6,
+          letterSpacing: -0.5,
+        },
+        headerSubtitle: {
+          fontSize: 15,
+          color: colors.textSecondary,
+          fontWeight: '600',
+          letterSpacing: -0.2,
+        },
+        assemblyContainer: {
+          marginBottom: 20,
+        },
+        assemblySelectorRow: {
+          flexDirection: 'row',
+          gap: 12,
+          alignItems: 'center',
+        },
+        assemblySelectorWrapper: {
+          flex: 1,
+          minWidth: 0,
+          height: 48,
+        },
+        filterHint: {
+          marginTop: 10,
+          color: colors.textSecondary,
+          fontSize: 13,
+          paddingHorizontal: 4,
+          fontWeight: '600',
+          letterSpacing: -0.1,
+        },
+        myAssemblyButtonCompact: {
+          flex: 1,
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 8,
+          height: 46,
+          minHeight: 46,
+          paddingVertical: 12,
+          paddingHorizontal: 16,
+          borderRadius: 12,
+          borderWidth: 1,
+          borderColor: colors.border,
+          backgroundColor: colors.card,
+          minWidth: 0,
+        },
+        section: {
+          backgroundColor: colors.card,
+          borderRadius: 18,
+          padding: 20,
+          borderWidth: 1.5,
+          borderColor: `${colors.primary}50`,
+          marginBottom: 18,
+          shadowColor: colors.primary,
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.12,
+          shadowRadius: 12,
+          elevation: 3,
+        },
+        sectionTitleContainer: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 8,
+          marginBottom: 16,
+          flexWrap: 'wrap',
+        },
+        sectionTitle: {
+          fontSize: 20,
+          fontWeight: '800',
+          color: colors.textPrimary,
+          letterSpacing: -0.3,
+        },
+        sectionTitleCount: {
+          fontSize: 18,
+          fontWeight: '700',
+          color: colors.primary,
+          letterSpacing: -0.2,
+        },
+        myAssemblyButtonActive: {
+          borderColor: colors.primary,
+          backgroundColor: `${colors.primary}10`,
+          borderWidth: 1.5,
+        },
+        myAssemblyButtonText: {
+          fontSize: 14,
+          fontWeight: '700',
+          color: colors.textSecondary,
+          letterSpacing: -0.1,
+        },
+        myAssemblyButtonTextActive: {
+          color: colors.primary,
+          fontWeight: '800',
+          letterSpacing: -0.1,
+        },
+        assemblyMoodFilterHint: {
+          marginTop: 6,
+          marginBottom: 14,
+          color: colors.textSecondary,
+          fontSize: 13,
+          fontStyle: 'italic',
+          fontWeight: '600',
+          letterSpacing: -0.1,
+        },
+        metricsGrid: {
+          flexDirection: 'row',
+          flexWrap: 'nowrap',
+          gap: 12,
+          justifyContent: 'space-between',
+        },
+        metricCard: {
+          flex: 1,
+          minWidth: 0,
+          backgroundColor: colors.surface,
+          borderRadius: 14,
+          padding: 14,
+          alignItems: 'center',
+          borderWidth: 1,
+          borderColor: `${colors.primary}30`,
+          shadowColor: colors.primary,
+          shadowOffset: { width: 0, height: 1 },
+          shadowOpacity: 0.08,
+          shadowRadius: 6,
+          elevation: 2,
+        },
+        metricIconContainer: {
+          width: 52,
+          height: 52,
+          borderRadius: 26,
+          justifyContent: 'center',
+          alignItems: 'center',
+          marginBottom: 10,
+          backgroundColor: `${colors.primary}15`,
+        },
+        metricValue: {
+          fontSize: 26,
+          fontWeight: '800',
+          color: colors.textPrimary,
+          marginBottom: 6,
+          letterSpacing: -0.5,
+        },
+        metricLabel: {
+          fontSize: 13,
+          color: colors.textSecondary,
+          textAlign: 'center',
+          fontWeight: '600',
+          letterSpacing: -0.1,
+        },
+        suggestionCard: {
+          backgroundColor: colors.surface,
+          borderRadius: 14,
+          padding: 14,
+          marginBottom: 12,
+          borderWidth: 1,
+          borderColor: `${colors.primary}40`,
+          shadowColor: colors.primary,
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.08,
+          shadowRadius: 8,
+          elevation: 2,
+        },
+        suggestionHeader: {
+          flexDirection: 'row',
+          gap: 12,
+        },
+        suggestionRank: {
+          width: 32,
+          height: 32,
+          borderRadius: 16,
+          backgroundColor: colors.primary,
+          borderWidth: 1.5,
+          borderColor: `${colors.primaryLight}80`,
+          justifyContent: 'center',
+          alignItems: 'center',
+        },
+        suggestionRankText: {
+          color: colors.textPrimary,
+          fontWeight: '800',
+          fontSize: 15,
+          letterSpacing: -0.3,
+        },
+        suggestionContent: {
+          flex: 1,
+          gap: 4,
+        },
+        suggestionTitle: {
+          fontSize: 15,
+          fontWeight: '700',
+          color: colors.textPrimary,
+          letterSpacing: -0.2,
+          lineHeight: 20,
+        },
+        suggestionDescription: {
+          fontSize: 13,
+          color: colors.textSecondary,
+          marginTop: 2,
+          fontWeight: '500',
+          lineHeight: 18,
+        },
+        suggestionMeta: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          marginTop: 4,
+          gap: 4,
+        },
+        suggestionAuthor: {
+          fontSize: 12,
+          color: colors.textSecondary,
+          fontWeight: '600',
+          letterSpacing: -0.1,
+        },
+        suggestionSegment: {
+          fontSize: 12,
+          color: colors.textSecondary,
+          fontWeight: '600',
+          letterSpacing: -0.1,
+        },
+        suggestionFooter: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 16,
+          marginTop: 8,
+          paddingTop: 8,
+          borderTopWidth: 1,
+          borderTopColor: `${colors.primary}30`,
+        },
+        suggestionReactions: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 4,
+        },
+        suggestionReactionText: {
+          fontSize: 13,
+          color: colors.textSecondary,
+          fontWeight: '700',
+          letterSpacing: -0.1,
+        },
+      }),
+    [colors],
+  );
+
+  // Get top 3 suggestions sorted by likes - from all segments for all roles
   const topSuggestions = useMemo(() => {
-    // For SuperAdmin: filter by selected assembly or show all
-    // For LocalAdmin: filter by their assigned assembly segment
-    // For others: show all data
-    let assemblyFilter: string | null = null;
-
-    if (isSuperAdmin) {
-      assemblyFilter = selectedAssembly;
-    } else if (
-      user?.role === 'LocalAdmin' &&
-      user?.assignedAreas?.assemblySegment
-    ) {
-      assemblyFilter = user.assignedAreas.assemblySegment;
-    }
-
+    // Show suggestions from all segments for all roles
     const suggestions = mockFeed
       .filter(item => {
         if (item.type !== 'SUGGESTION') return false;
-        if (assemblyFilter) {
-          return item.areaScope?.assemblySegment === assemblyFilter;
-        }
-        return true;
+        return true; // No filtering - show suggestions from all segments
       })
       .map(item => ({
         id: item.id,
@@ -359,73 +749,212 @@ export const DashboardScreen = (): React.ReactElement => {
       .slice(0, 3);
 
     return suggestions;
-  }, [selectedAssembly, isSuperAdmin, user]) as SuggestionItem[];
+  }, []) as SuggestionItem[]; // No dependencies - always shows all suggestions
+
+  // Helper function to get user points by name or aliasName
+  const getUserPoints = (nameOrAlias: string): number | null => {
+    const user = telanganaUsers.find(
+      u =>
+        u.name?.toLowerCase() === nameOrAlias.toLowerCase() ||
+        u.aliasName?.toLowerCase() === nameOrAlias.toLowerCase(),
+    );
+    return user?.points ?? null;
+  };
+
+  // Handle metric card press
+  const handleMetricPress = (screenName: string | undefined) => {
+    if (screenName) {
+      navigation.navigate(screenName);
+    }
+  };
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Command Center</Text>
-        <Text style={styles.headerSubtitle}>Real-time campaign insights</Text>
+        <Text style={styles.headerTitle}>Overview</Text>
       </View>
 
       {/* Assembly Selector - Only for SuperAdmin */}
       {isSuperAdmin && (
         <View style={styles.assemblyContainer}>
-          <AssemblySelector
-            value={selectedAssembly}
-            onSelect={setSelectedAssembly}
-            placeholder="Select Assembly to Filter"
-            mode="dropdown"
-          />
+          <View style={styles.assemblySelectorRow}>
+            <View style={styles.assemblySelectorWrapper}>
+              <AssemblySelector
+                key={`assembly-selector-${
+                  showMyAssemblyOnly ? 'my-assembly' : 'filter'
+                }`}
+                value={selectedAssembly}
+                onSelect={assembly => {
+                  setSelectedAssembly(assembly);
+                  // Clear "My Assembly" toggle when SuperAdmin selects an assembly
+                  if (assembly) {
+                    setShowMyAssemblyOnly(false);
+                  }
+                }}
+                placeholder="Select Assembly to Filter"
+                mode="dropdown"
+              />
+            </View>
+            {/* My Assembly Button for SuperAdmin */}
+            {user?.assignedAreas?.assemblySegment && (
+              <TouchableOpacity
+                style={[
+                  styles.myAssemblyButtonCompact,
+                  showMyAssemblyOnly && styles.myAssemblyButtonActive,
+                ]}
+                onPress={() => {
+                  const newValue = !showMyAssemblyOnly;
+                  setShowMyAssemblyOnly(newValue);
+                  // Clear assembly selection when toggling My Assembly ON
+                  // This will force the dropdown to close via the key change
+                  if (newValue) {
+                    setSelectedAssembly(null);
+                  }
+                }}
+                activeOpacity={0.7}
+              >
+                <MaterialIcons
+                  name={showMyAssemblyOnly ? 'location-on' : 'location-off'}
+                  size={20}
+                  color={
+                    showMyAssemblyOnly ? colors.primary : colors.textSecondary
+                  }
+                />
+                <Text
+                  style={[
+                    styles.myAssemblyButtonText,
+                    showMyAssemblyOnly && styles.myAssemblyButtonTextActive,
+                  ]}
+                >
+                  My Assembly
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
           <Text style={styles.filterHint}>
             {selectedAssembly
               ? `Showing metrics for ${selectedAssembly}`
+              : showMyAssemblyOnly && user?.assignedAreas?.assemblySegment
+              ? `Showing metrics for ${user.assignedAreas.assemblySegment}`
               : 'Select assembly to filter metrics (or leave empty to see all)'}
           </Text>
         </View>
       )}
 
-      {/* Show current filter for LocalAdmin */}
-      {user?.role === 'LocalAdmin' && user?.assignedAreas?.assemblySegment && (
+      {/* Show current filter for LocalAdmin and Member */}
+      {!isSuperAdmin && user?.assignedAreas?.assemblySegment && (
         <View style={styles.assemblyContainer}>
           <Text style={styles.filterHint}>
-            Showing metrics for your segment:{' '}
-            {user.assignedAreas.assemblySegment}
+            Showing data for your segment: {user.assignedAreas.assemblySegment}
           </Text>
         </View>
       )}
 
-      {/* Key Metrics */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>📊 Key Metrics</Text>
-        <View style={styles.metricsGrid}>
-          {metrics.map(metric => (
-            <View key={metric.id} style={styles.metricCard}>
-              <View
-                style={[
-                  styles.metricIconContainer,
-                  { backgroundColor: `${metric.color}20` },
-                ]}
+      {/* Key Metrics - Only for SuperAdmin */}
+      {isSuperAdmin && (
+        <View style={styles.section}>
+          <View style={styles.sectionTitleContainer}>
+            <Text style={styles.sectionTitle}>📊 Key Metrics</Text>
+            <TouchableOpacity
+              onPress={() => {
+                const userRole = isSuperAdmin
+                  ? 'superAdmin'
+                  : isLocalAdmin
+                  ? 'localAdmin'
+                  : 'member';
+                const screenName =
+                  isSuperAdmin || isLocalAdmin
+                    ? `${userRole}-UserManagement`
+                    : undefined;
+                if (screenName) {
+                  navigation.navigate(screenName);
+                }
+              }}
+              disabled={!(isSuperAdmin || isLocalAdmin)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.sectionTitleCount}>
+                ({metrics.totalUsers.toLocaleString()} Users)
+              </Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.metricsGrid}>
+            {metrics.metrics.map(metric => (
+              <TouchableOpacity
+                key={metric.id}
+                style={styles.metricCard}
+                onPress={() => handleMetricPress(metric.screenName)}
+                activeOpacity={0.7}
+                disabled={!metric.screenName}
               >
-                <MaterialIcons
-                  name={metric.icon as any}
-                  size={24}
-                  color={metric.color}
-                />
-              </View>
-              <Text style={styles.metricValue}>{metric.value}</Text>
-              <Text style={styles.metricLabel}>{metric.label}</Text>
-            </View>
-          ))}
+                <View
+                  style={[
+                    styles.metricIconContainer,
+                    { backgroundColor: `${metric.color}20` },
+                  ]}
+                >
+                  <MaterialIcons
+                    name={metric.icon as any}
+                    size={24}
+                    color={metric.color}
+                  />
+                </View>
+                <Text style={styles.metricValue}>{metric.value}</Text>
+                <Text style={styles.metricLabel}>{metric.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
         </View>
+      )}
+
+      {/* Assembly Mood Section */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>📊 Assembly Mood</Text>
+
+        {/* Show current filter status */}
+        {!isSuperAdmin && user?.assignedAreas?.assemblySegment && (
+          <Text style={styles.assemblyMoodFilterHint}>
+            Showing data for: {user.assignedAreas.assemblySegment}
+          </Text>
+        )}
+        {isSuperAdmin &&
+          showMyAssemblyOnly &&
+          user?.assignedAreas?.assemblySegment && (
+            <Text style={styles.assemblyMoodFilterHint}>
+              Showing data for: {user.assignedAreas.assemblySegment}
+            </Text>
+          )}
+        {isSuperAdmin && !showMyAssemblyOnly && !selectedAssembly && (
+          <Text style={styles.assemblyMoodFilterHint}>
+            Showing data for all segments
+          </Text>
+        )}
+        {isSuperAdmin && selectedAssembly && (
+          <Text style={styles.assemblyMoodFilterHint}>
+            Showing data for: {selectedAssembly}
+          </Text>
+        )}
+
+        <AssemblyMoodCharts
+          refreshKey={refreshKey}
+          selectedAssembly={
+            isSuperAdmin
+              ? selectedAssembly
+              : user?.assignedAreas?.assemblySegment || null
+          }
+          userAssemblySegment={user?.assignedAreas?.assemblySegment || null}
+          isSuperAdmin={isSuperAdmin}
+          showMyAssemblyOnly={!isSuperAdmin || showMyAssemblyOnly}
+          colors={colors}
+        />
       </View>
 
       {/* Top 3 Suggestions */}
-      {topSuggestions.length > 0 && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>💡 Top Suggestions</Text>
-          {topSuggestions.map((suggestion, index) => (
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>💡 Top Suggestions</Text>
+        {topSuggestions.length > 0 ? (
+          topSuggestions.map((suggestion, index) => (
             <TouchableOpacity
               key={suggestion.id}
               style={styles.suggestionCard}
@@ -448,9 +977,48 @@ export const DashboardScreen = (): React.ReactElement => {
                     </Text>
                   )}
                   <View style={styles.suggestionMeta}>
-                    <Text style={styles.suggestionAuthor}>
-                      {suggestion.authorName}
-                    </Text>
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        flexWrap: 'wrap',
+                        gap: 4,
+                      }}
+                    >
+                      <Text
+                        style={[
+                          styles.suggestionAuthor,
+                          { fontWeight: '800', color: colors.textPrimary },
+                        ]}
+                      >
+                        {suggestion.authorName}
+                      </Text>
+                      {(() => {
+                        const userPoints = getUserPoints(suggestion.authorName);
+                        if (userPoints && userPoints > 0) {
+                          return (
+                            <View
+                              style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                gap: 4,
+                              }}
+                            >
+                              <Text
+                                style={[
+                                  styles.suggestionAuthor,
+                                  { fontWeight: '600' },
+                                ]}
+                              >
+                                • Points: {userPoints.toLocaleString()}
+                              </Text>
+                              <UserBadge points={userPoints} size={14} />
+                            </View>
+                          );
+                        }
+                        return null;
+                      })()}
+                    </View>
                     {suggestion.assemblySegment && (
                       <Text style={styles.suggestionSegment}>
                         • {suggestion.assemblySegment}
@@ -482,165 +1050,27 @@ export const DashboardScreen = (): React.ReactElement => {
                 </View>
               </View>
             </TouchableOpacity>
-          ))}
-        </View>
-      )}
+          ))
+        ) : (
+          <View
+            style={{
+              padding: 20,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Text
+              style={{
+                fontSize: 14,
+                color: colors.textSecondary,
+                textAlign: 'center',
+              }}
+            >
+              No suggestions available for your segment yet.
+            </Text>
+          </View>
+        )}
+      </View>
     </ScrollView>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  content: {
-    padding: 16,
-    paddingBottom: 32,
-  },
-  header: {
-    marginTop: 20,
-    marginBottom: 20,
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    marginBottom: 4,
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    color: colors.textSecondary,
-  },
-  assemblyContainer: {
-    marginBottom: 16,
-  },
-  filterHint: {
-    marginTop: 8,
-    color: colors.textSecondary,
-    fontSize: 12,
-    paddingHorizontal: 4,
-  },
-  section: {
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    marginBottom: 12,
-  },
-  metricsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  metricCard: {
-    flex: 1,
-    minWidth: '30%',
-    maxWidth: '48%',
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    padding: 12,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  metricIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  metricValue: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    marginBottom: 4,
-  },
-  metricLabel: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
-  suggestionCard: {
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  suggestionHeader: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  suggestionRank: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  suggestionRankText: {
-    color: colors.textPrimary,
-    fontWeight: '700',
-    fontSize: 14,
-  },
-  suggestionContent: {
-    flex: 1,
-    gap: 4,
-  },
-  suggestionTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.textPrimary,
-  },
-  suggestionDescription: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
-  suggestionMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 4,
-    gap: 4,
-  },
-  suggestionAuthor: {
-    fontSize: 11,
-    color: colors.textSecondary,
-    fontWeight: '500',
-  },
-  suggestionSegment: {
-    fontSize: 11,
-    color: colors.textSecondary,
-  },
-  suggestionFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-    marginTop: 8,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  suggestionReactions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  suggestionReactionText: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    fontWeight: '600',
-  },
-});

@@ -15,7 +15,8 @@ import {
   selectIsPending,
   selectIsSuperAdmin,
 } from '../store/slices/authSlice';
-import { colors } from '../theme/colors';
+import { useTheme } from '../theme/useTheme';
+import { UserDetailsHeader } from '../components/UserDetailsHeader';
 import { LoginScreen } from '../screens/auth/LoginScreen';
 import { PendingApprovalScreen } from '../screens/auth/PendingApprovalScreen';
 import { OtpVerificationScreen } from '../screens/auth/OtpVerificationScreen';
@@ -25,6 +26,8 @@ import { CreateFeedScreen } from '../screens/common/CreateFeedScreen';
 import { UserProfileScreen } from '../screens/common/UserProfileScreen';
 import { SuggestionsScreen } from '../screens/common/SuggestionsScreen';
 import { ReportsScreen } from '../screens/common/ReportsScreen';
+import { PostAssemblyViewScreen } from '../screens/common/PostAssemblyViewScreen';
+import { BookmarksScreen } from '../screens/common/BookmarksScreen';
 import { ApprovalQueueScreen } from '../screens/admin/ApprovalQueueScreen';
 import { UserManagementScreen } from '../screens/admin/UserManagementScreen';
 import { AdminAlertsScreen } from '../screens/admin/AdminAlertsScreen';
@@ -57,6 +60,8 @@ const getHiddenScreens = (role: RoleKey) => {
   const shared = [
     { name: 'Suggestions', component: SuggestionsScreen },
     { name: 'AlertsView', component: AlertsScreen },
+    { name: 'PostAssemblyView', component: PostAssemblyViewScreen },
+    { name: 'Bookmarks', component: BookmarksScreen },
   ];
 
   if (role === 'localAdmin' || role === 'superAdmin') {
@@ -78,11 +83,30 @@ const getHiddenScreens = (role: RoleKey) => {
 };
 
 // Create a function to get tab screen options with safe area insets and role-based styling
-const getTabScreenOptions = (insets: { bottom: number }, tabCount: number) => {
+const getTabScreenOptions = (
+  insets: { top: number; bottom: number },
+  tabCount: number,
+  colors: ReturnType<typeof useTheme>,
+) => {
   const isCompact = tabCount >= 6;
   const bottomPadding = Math.max(insets.bottom, 8);
   return {
-    headerShown: false,
+    headerShown: true,
+    header: () => (
+      <View
+        style={{
+          flexDirection: 'row',
+          justifyContent: 'flex-end',
+          alignItems: 'center',
+          paddingHorizontal: 16,
+          paddingTop: insets.top + 4,
+          paddingBottom: 4,
+          backgroundColor: colors.background,
+        }}
+      >
+        <UserDetailsHeader />
+      </View>
+    ),
     tabBarActiveTintColor: colors.primary,
     tabBarInactiveTintColor: colors.textSecondary,
     tabBarStyle: {
@@ -119,56 +143,111 @@ const buildTabs =
   ({ role }: TabBuilderProps) =>
   () => {
     const insets = useSafeAreaInsets();
-    const menuItems = getMenuForRole(role);
-    const tabCount = menuItems.length;
-
-    return (
-      <Tab.Navigator screenOptions={getTabScreenOptions(insets, tabCount)}>
-        {menuItems.map(item => (
-          <Tab.Screen
-            key={`${role}-${item.name}`}
-            name={`${role}-${item.name}`}
-            component={item.component}
-            options={{
-              title: item.title,
-              tabBarIcon: ({ color, focused }) => (
-                <View
-                  style={{
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    width: '100%',
-                  }}
-                >
-                  <MaterialIcons
-                    name={item.icon as any}
-                    size={
-                      tabCount === 6 ? (focused ? 24 : 22) : focused ? 26 : 24
-                    }
-                    color={color}
-                  />
-                  <Text
-                    style={{
-                      color,
-                      fontSize: tabCount === 6 ? 10 : 11,
-                      fontWeight: (focused
-                        ? '700'
-                        : '600') as TextStyle['fontWeight'],
-                      textAlign: 'center',
-                      marginTop: 0,
-                    }}
-                    numberOfLines={1}
-                    adjustsFontSizeToFit
-                    minimumFontScale={0.8}
-                  >
-                    {item.title}
-                  </Text>
-                </View>
-              ),
+    const colors = useTheme();
+    try {
+      if (!getMenuForRole) {
+        console.error('getMenuForRole is not available. Using fallback.');
+        return (
+          <View
+            style={{
+              flex: 1,
+              justifyContent: 'center',
+              alignItems: 'center',
+              backgroundColor: colors.background,
             }}
-          />
-        ))}
-      </Tab.Navigator>
-    );
+          >
+            <Text style={{ color: colors.textPrimary }}>
+              Menu configuration error
+            </Text>
+          </View>
+        );
+      }
+      const menuItems = getMenuForRole(role);
+      if (!menuItems || !Array.isArray(menuItems)) {
+        console.error('getMenuForRole returned invalid result:', menuItems);
+        return (
+          <View
+            style={{
+              flex: 1,
+              justifyContent: 'center',
+              alignItems: 'center',
+              backgroundColor: colors.background,
+            }}
+          >
+            <Text style={{ color: colors.textPrimary }}>
+              Menu configuration error
+            </Text>
+          </View>
+        );
+      }
+      const tabCount = menuItems.length;
+
+      return (
+        <Tab.Navigator
+          screenOptions={getTabScreenOptions(insets, tabCount, colors)}
+        >
+          {menuItems.map(item => (
+            <Tab.Screen
+              key={`${role}-${item.name}`}
+              name={`${role}-${item.name}`}
+              component={item.component}
+              options={{
+                title: item.title,
+                tabBarIcon: ({ color, focused }) => (
+                  <View
+                    style={{
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: '100%',
+                    }}
+                  >
+                    <MaterialIcons
+                      name={item.icon as any}
+                      size={
+                        tabCount === 6 ? (focused ? 24 : 22) : focused ? 26 : 24
+                      }
+                      color={color}
+                    />
+                    <Text
+                      style={{
+                        color,
+                        fontSize: tabCount === 6 ? 10 : 11,
+                        fontWeight: (focused
+                          ? '700'
+                          : '600') as TextStyle['fontWeight'],
+                        textAlign: 'center',
+                        marginTop: 0,
+                      }}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.8}
+                    >
+                      {item.title}
+                    </Text>
+                  </View>
+                ),
+              }}
+            />
+          ))}
+        </Tab.Navigator>
+      );
+    } catch (error) {
+      console.error('Error in buildTabs:', error);
+      return (
+        <View
+          style={{
+            flex: 1,
+            justifyContent: 'center',
+            alignItems: 'center',
+            backgroundColor: colors.background,
+          }}
+        >
+          <Text style={{ color: colors.textPrimary }}>
+            Error loading menu configuration
+          </Text>
+        </View>
+      );
+    }
   };
 
 const MemberTabs = buildTabs({ role: 'member' });
@@ -176,11 +255,19 @@ const LocalAdminTabs = buildTabs({ role: 'localAdmin' });
 const SuperAdminTabs = buildTabs({ role: 'superAdmin' });
 
 export const RootNavigator = (): React.ReactElement => {
+  console.log('RootNavigator: Starting');
   const dispatch = useAppDispatch();
   const auth = useAppSelector(selectAuth);
   const isPending = useAppSelector(selectIsPending);
   const isLocalAdmin = useAppSelector(selectIsLocalAdmin);
   const isSuperAdmin = useAppSelector(selectIsSuperAdmin);
+
+  console.log('RootNavigator: Auth state', {
+    hasToken: !!auth.token,
+    isPending,
+    isLocalAdmin,
+    isSuperAdmin,
+  });
 
   const activeRole: RoleKey = isSuperAdmin
     ? 'superAdmin'
@@ -270,3 +357,6 @@ export const RootNavigator = (): React.ReactElement => {
     </Stack.Navigator>
   );
 };
+
+// Ensure the export is available
+export default RootNavigator;
