@@ -8,6 +8,10 @@ import { ReportsScreen } from '../screens/common/ReportsScreen';
 import { SettingsScreen } from '../screens/common/SettingsScreen';
 import { SuggestionsScreen } from '../screens/common/SuggestionsScreen';
 import { OtherMenuScreen } from '../screens/common/OtherMenuScreen';
+import { CadreDirectoryScreen } from '../screens/common/CadreDirectoryScreen';
+import { MeetingsScreen } from '../screens/common/MeetingsScreen';
+import { ReportsDashboardScreen } from '../screens/common/ReportsDashboardScreen';
+import { TopicRecommendationScreen } from '../screens/common/TopicRecommendationScreen';
 import { ApprovalQueueScreen } from '../screens/admin/ApprovalQueueScreen';
 import { UserManagementScreen } from '../screens/admin/UserManagementScreen';
 import { AdminReportsScreen } from '../screens/admin/AdminReportsScreen';
@@ -37,21 +41,22 @@ export const menuConfig: Record<RoleKey, MenuItem[]> = {
       component: PostsScreen,
     },
     {
-      name: 'FakeNews',
-      title: 'Fake News',
-      icon: 'report-problem',
-      component: FakeNewsScreen,
+      name: 'TopicRecommendation',
+      title: 'Topics',
+      // Revert to lightbulb icon and keep this as 3rd tab
+      icon: 'lightbulb',
+      component: TopicRecommendationScreen,
     },
     {
-      name: 'Polls',
-      title: 'Polls',
-      icon: 'how-to-vote',
-      component: PollsScreen,
+      name: 'Meetings',
+      title: 'Meetings',
+      icon: 'event',
+      component: MeetingsScreen,
     },
     {
       name: 'Other',
       title: 'Other',
-      icon: 'more-horiz',
+      icon: 'apps',
       component: OtherMenuScreen,
     },
     {
@@ -75,21 +80,21 @@ export const menuConfig: Record<RoleKey, MenuItem[]> = {
       component: PostsScreen,
     },
     {
-      name: 'FakeNews',
-      title: 'Fake News',
-      icon: 'report-problem',
-      component: FakeNewsScreen,
+      name: 'TopicRecommendation',
+      title: 'Topics',
+      icon: 'lightbulb',
+      component: TopicRecommendationScreen,
     },
     {
-      name: 'Polls',
-      title: 'Polls',
-      icon: 'how-to-vote',
-      component: PollsScreen,
+      name: 'Meetings',
+      title: 'Meetings',
+      icon: 'event',
+      component: MeetingsScreen,
     },
     {
       name: 'Other',
       title: 'Other',
-      icon: 'more-horiz',
+      icon: 'apps',
       component: OtherMenuScreen,
     },
     {
@@ -113,21 +118,21 @@ export const menuConfig: Record<RoleKey, MenuItem[]> = {
       component: PostsScreen,
     },
     {
-      name: 'FakeNews',
-      title: 'Fake News',
-      icon: 'report-problem',
-      component: FakeNewsScreen,
+      name: 'TopicRecommendation',
+      title: 'Topics',
+      icon: 'lightbulb',
+      component: TopicRecommendationScreen,
     },
     {
-      name: 'Polls',
-      title: 'Polls',
-      icon: 'poll',
-      component: PollsScreen,
+      name: 'Meetings',
+      title: 'Meetings',
+      icon: 'event',
+      component: MeetingsScreen,
     },
     {
       name: 'Other',
       title: 'Other',
-      icon: 'more-horiz',
+      icon: 'apps',
       component: OtherMenuScreen,
     },
     {

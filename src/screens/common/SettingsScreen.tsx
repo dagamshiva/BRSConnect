@@ -43,7 +43,7 @@ export const SettingsScreen = (): JSX.Element => {
         <View style={dynamicStyles.profileInfo}>
           <Text style={dynamicStyles.name}>{user.name}</Text>
           <View style={dynamicStyles.roleBadge}>
-            <MaterialIcons name="military-tech" size={16} color={colors.textPrimary} />
+            <MaterialIcons name="military-tech" size={16} color="#FFFFFF" />
             <Text style={dynamicStyles.roleText}>{user.role}</Text>
           </View>
           {user.email ? <Text style={dynamicStyles.metaText}>{user.email}</Text> : null}
@@ -190,8 +190,9 @@ const getStyles = (colors: typeof import("../../theme/themeColors").whiteTheme) 
     paddingVertical: 4,
   },
   roleText: {
-    color: colors.textPrimary,
+    color: "#FFFFFF",
     fontWeight: "700",
+    fontSize: 12,
   },
   metaText: {
     color: colors.textSecondary,

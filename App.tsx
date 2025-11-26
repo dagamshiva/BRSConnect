@@ -36,9 +36,9 @@ const LoadingOverlay = ({ onFinish, colors }: { onFinish: () => void; colors: Re
       backgroundColor: colors.overlay,
     },
     logoWrapper: {
-      width: 200,
-      height: 200,
-      borderRadius: 100, // Perfect circle
+      width: 120,
+      height: 120,
+      borderRadius: 60, // Perfect circle
       backgroundColor: "transparent", // Transparent background
       justifyContent: "center",
       alignItems: "center",
@@ -60,7 +60,7 @@ const LoadingOverlay = ({ onFinish, colors }: { onFinish: () => void; colors: Re
   return (
     <View style={overlayStyles.overlay}>
       <View style={overlayStyles.logoWrapper}>
-        <BRSLogo size={200} showText={false} variant="icon" />
+        <BRSLogo size={120} showText={false} variant="icon" />
       </View>
       <Text style={overlayStyles.overlayTitle}>BRS Connect</Text>
       <Text style={overlayStyles.overlaySubtitle}>Powering the Pink Car movement…</Text>

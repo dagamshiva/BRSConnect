@@ -18,6 +18,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../theme/colors';
 import { AssemblySelector } from '../../components/AssemblySelector';
 import { CATEGORY_OPTIONS, type Category } from '../../data/commonData';
+import { useAppSelector } from '../../store/hooks';
+import { selectAuth } from '../../store/slices/authSlice';
 
 type Scope = 'assembly' | 'trending';
 
@@ -40,12 +42,16 @@ interface FeedItem {
   assemblySegment?: string;
   aliasName: string;
   pollOptions?: Array<{ id: string; label: string; votes: number }>;
+  postedBy?: string; // ID of the user who posted it (for edit functionality)
+  hasRealMedia?: boolean; // Whether the post has real media (not a fallback)
 }
 
 export const CreateFeedScreen = (): JSX.Element => {
   const navigation = useNavigation();
   const route = useRoute();
   const insets = useSafeAreaInsets();
+  const auth = useAppSelector(selectAuth);
+  const user = auth.user;
   const onFeedCreated = (route.params as any)?.onFeedCreated;
   const [newTitle, setNewTitle] = useState('');
   const [newSummary, setNewSummary] = useState('');
@@ -259,8 +265,8 @@ export const CreateFeedScreen = (): JSX.Element => {
         id: feedId,
         type: 'POLL' as const,
         title: newTitle.trim(),
-        postedBy: 'demo-user-id', // Demo user ID
-        authorName: 'Demo User',
+        postedBy: user?.id || 'demo-user-id', // Use actual user ID
+        authorName: user?.name || user?.aliasName || 'Demo User',
         areaScope: newAssemblySegment
           ? {
               assemblySegment: newAssemblySegment,
@@ -288,8 +294,10 @@ export const CreateFeedScreen = (): JSX.Element => {
         shares: 0,
         createdAt: now,
         assemblySegment: newAssemblySegment || undefined,
-        aliasName: 'Demo User',
+        aliasName: user?.name || user?.aliasName || 'Demo User',
         pollOptions: validOptions,
+        postedBy: user?.id || 'demo-user-id', // Include author ID for edit functionality
+        hasRealMedia: false, // Polls don't have media
       };
 
       if (onFeedCreated) {
@@ -344,8 +352,8 @@ export const CreateFeedScreen = (): JSX.Element => {
             title: newTitle.trim() || newSummary.trim() || 'Untitled',
             mediaUrl: mediaUrl || newMedia || '',
             videoPlatform: detectedPlatform || 'YouTube', // Default to YouTube for backward compatibility
-            postedBy: 'demo-user-id',
-            authorName: 'Demo User',
+            postedBy: user?.id || 'demo-user-id', // Use actual user ID
+            authorName: user?.name || user?.aliasName || 'Demo User',
             areaScope: newAssemblySegment
               ? {
                   assemblySegment: newAssemblySegment,
@@ -361,8 +369,8 @@ export const CreateFeedScreen = (): JSX.Element => {
               id: feedId,
               type: 'SUGGESTION' as const,
               title: newTitle.trim(),
-              postedBy: 'demo-user-id',
-              authorName: 'Demo User',
+              postedBy: user?.id || 'demo-user-id', // Use actual user ID
+              authorName: user?.name || user?.aliasName || 'Demo User',
               areaScope: newAssemblySegment
                 ? {
                     assemblySegment: newAssemblySegment,
@@ -378,8 +386,8 @@ export const CreateFeedScreen = (): JSX.Element => {
               id: feedId,
               type: 'NEWS' as const,
               title: newTitle.trim(),
-              postedBy: 'demo-user-id',
-              authorName: 'Demo User',
+              postedBy: user?.id || 'demo-user-id', // Use actual user ID
+              authorName: user?.name || user?.aliasName || 'Demo User',
               areaScope: newAssemblySegment
                 ? {
                     assemblySegment: newAssemblySegment,
@@ -431,7 +439,9 @@ export const CreateFeedScreen = (): JSX.Element => {
       shares: 0,
       createdAt: now,
       assemblySegment: newAssemblySegment || undefined,
-      aliasName: 'Demo User',
+      aliasName: user?.name || user?.aliasName || 'Demo User',
+      postedBy: user?.id || 'demo-user-id', // Include author ID for edit functionality
+      hasRealMedia: !!newMedia, // Track if user provided actual media
     };
 
     if (onFeedCreated) {
@@ -780,7 +790,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   chipActive: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.primary + '20',
     borderColor: colors.primary,
   },
   chipText: {
@@ -789,7 +799,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   chipTextActive: {
-    color: colors.textPrimary,
+    color: colors.primary,
   },
   assemblySegmentContainer: {
     position: 'relative',
@@ -935,24 +945,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.primary + '20',
     paddingVertical: 14,
     paddingHorizontal: 18,
     borderRadius: 14,
     marginTop: 8,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
   },
   submitText: {
-    color: colors.textPrimary,
+    color: colors.primary,
     fontWeight: '800',
-    fontSize: 15,
-    letterSpacing: -0.2,
-    fontWeight: '700',
     fontSize: 16,
+    letterSpacing: -0.2,
   },
   pollOptionRow: {
     flexDirection: 'row',

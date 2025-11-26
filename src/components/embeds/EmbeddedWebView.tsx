@@ -1,5 +1,5 @@
-import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { WebView, WebViewProps } from 'react-native-webview';
 import { colors } from '../../theme/colors';
 
@@ -19,6 +19,18 @@ export const EmbeddedWebView = ({
 	testID,
 	userAgent = DEFAULT_DESKTOP_UA,
 }: Props): React.ReactElement => {
+	const [isLoading, setIsLoading] = useState(true);
+
+	// Safety timeout: if WebView doesn't fire load events (some widgets),
+	// hide the spinner after a few seconds so it doesn't stay forever.
+	useEffect(() => {
+		if (!isLoading) return;
+		const timeout = setTimeout(() => {
+			setIsLoading(false);
+		}, 6000);
+		return () => clearTimeout(timeout);
+	}, [isLoading]);
+
 	return (
 		<View style={[styles.container, { height }]} testID={testID}>
 			<WebView
@@ -35,7 +47,15 @@ export const EmbeddedWebView = ({
 				source={source}
 				style={styles.webview}
 				pointerEvents="none"
+				onLoadStart={() => setIsLoading(true)}
+				onLoadEnd={() => setIsLoading(false)}
+				onError={() => setIsLoading(false)}
 			/>
+			{isLoading && (
+				<View style={styles.loaderOverlay}>
+					<ActivityIndicator size="small" color={colors.primary} />
+				</View>
+			)}
 		</View>
 	);
 };
@@ -49,6 +69,12 @@ const styles = StyleSheet.create({
 	},
 	webview: {
 		flex: 1,
+	},
+	loaderOverlay: {
+		...StyleSheet.absoluteFillObject,
+		justifyContent: 'center',
+		alignItems: 'center',
+		backgroundColor: 'rgba(0,0,0,0.02)',
 	},
 });
 

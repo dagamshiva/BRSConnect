@@ -35,6 +35,11 @@ import { ApprovalUsersScreen } from '../screens/admin/ApprovalUsersScreen';
 import { SendMessageToSegmentAdminsScreen } from '../screens/admin/SendMessageToSuperAdminsScreen';
 import { AlertsScreen } from '../screens/admin/AlertsScreen';
 import { ShowUserDetailsScreen } from '../screens/admin/ShowUserDetailsScreen';
+import { AssemblyDetailsScreen } from '../screens/common/AssemblyDetailsScreen';
+import { MeetingDetailScreen } from '../screens/common/MeetingDetailScreen';
+import { PollsScreen } from '../screens/common/PollsScreen';
+import { CadreDirectoryScreen } from '../screens/common/CadreDirectoryScreen';
+import { ReportsDashboardScreen } from '../screens/common/ReportsDashboardScreen';
 import { getMenuForRole, type RoleKey } from './menuConfig';
 
 type RootStackParamList = {
@@ -49,6 +54,8 @@ type RootStackParamList = {
   CreatePoll: undefined;
   CreateFeed: { onFeedCreated?: (feed: any) => void } | undefined;
   UserProfile: undefined;
+  AssemblyDetails: { assemblyName: string };
+  MeetingDetail: { meeting: any };
 } & {
   [key: string]: undefined | object | undefined;
 };
@@ -62,6 +69,11 @@ const getHiddenScreens = (role: RoleKey) => {
     { name: 'AlertsView', component: AlertsScreen },
     { name: 'PostAssemblyView', component: PostAssemblyViewScreen },
     { name: 'Bookmarks', component: BookmarksScreen },
+    { name: 'AssemblyDetails', component: AssemblyDetailsScreen },
+    { name: 'MeetingDetail', component: MeetingDetailScreen },
+    { name: 'Polls', component: PollsScreen },
+    { name: 'CadreDirectory', component: CadreDirectoryScreen },
+    { name: 'ReportsDashboard', component: ReportsDashboardScreen },
   ];
 
   if (role === 'localAdmin' || role === 'superAdmin') {
@@ -208,22 +220,6 @@ const buildTabs =
                       }
                       color={color}
                     />
-                    <Text
-                      style={{
-                        color,
-                        fontSize: tabCount === 6 ? 10 : 11,
-                        fontWeight: (focused
-                          ? '700'
-                          : '600') as TextStyle['fontWeight'],
-                        textAlign: 'center',
-                        marginTop: 0,
-                      }}
-                      numberOfLines={1}
-                      adjustsFontSizeToFit
-                      minimumFontScale={0.8}
-                    >
-                      {item.title}
-                    </Text>
                   </View>
                 ),
               }}

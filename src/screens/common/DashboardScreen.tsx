@@ -5,6 +5,8 @@ import {
   Text,
   View,
   TouchableOpacity,
+  Modal,
+  Platform,
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -28,6 +30,7 @@ import {
   getPartyDistribution,
   getBRSSatisfactionPercentage,
 } from '../../../mocks/mock_myassembly_view';
+import { useLocalSuggestions } from '../../context/LocalSuggestionsContext';
 
 interface MetricCard {
   id: string;
@@ -111,12 +114,12 @@ const AssemblyMoodCharts = ({
     () =>
       StyleSheet.create({
         chartsContainer: {
-          flexDirection: 'row',
+          flexDirection: 'column',
           gap: 12,
           marginTop: 12,
         },
         chartCard: {
-          flex: 1,
+          width: '100%',
           backgroundColor: colors.card,
           borderRadius: 16,
           padding: 16,
@@ -132,6 +135,14 @@ const AssemblyMoodCharts = ({
     [colors],
   );
 
+  // Dynamic title for winning chances chart
+  const winningChancesTitle = useMemo(() => {
+    if (assemblySegment) {
+      return `Winning Chances at ${assemblySegment}`;
+    }
+    return 'Winning Chances (All Segments)';
+  }, [assemblySegment]);
+
   return (
     <View style={chartStyles.chartsContainer}>
       {/* BRS Satisfaction Gauge */}
@@ -144,12 +155,12 @@ const AssemblyMoodCharts = ({
         />
       </View>
 
-      {/* Party Preference Pie Chart */}
+      {/* Winning Chances Pie Chart */}
       <View style={chartStyles.chartCard}>
         <PieChart
           key={`pie-${refreshKey}-${assemblySegment}`}
           data={partyDistributionData}
-          title="Party Preference"
+          title={winningChancesTitle}
           size={180}
         />
       </View>
@@ -161,6 +172,7 @@ export const DashboardScreen = (): React.ReactElement => {
   const { user } = useAppSelector(selectAuth);
   const isSuperAdmin = useAppSelector(selectIsSuperAdmin);
   const isLocalAdmin = useAppSelector(selectIsLocalAdmin);
+  const { suggestions: localSuggestions } = useLocalSuggestions();
 
   // For LocalAdmin and Member: default to their own assembly segment
   // For SuperAdmin: start with null (can select any assembly)
@@ -173,6 +185,9 @@ export const DashboardScreen = (): React.ReactElement => {
     defaultAssembly,
   );
   const [showMyAssemblyOnly, setShowMyAssemblyOnly] = useState<boolean>(false); // For Assembly Mood filter
+  const [showMyAssemblyOnlySuggestions, setShowMyAssemblyOnlySuggestions] = useState<boolean>(false); // For Top Suggestions filter
+  const [selectedSuggestion, setSelectedSuggestion] =
+    useState<SuggestionItem | null>(null);
   const [refreshKey, setRefreshKey] = useState(0); // Force re-render when votes change
   const navigation = useNavigation<any>();
   const colors = useTheme(); // Define colors early so it can be used in useMemo hooks
@@ -432,15 +447,16 @@ export const DashboardScreen = (): React.ReactElement => {
       metrics: [
         {
           id: 'm4',
-          label: 'Today Posts',
+          label: 'Posts',
           value: postsToday.length.toLocaleString(),
-          icon: 'today',
+          // Use a news/post related symbol instead of calendar
+          icon: 'article',
           color: colors.primary,
           screenName: `${userRole}-Posts`,
         },
         {
           id: 'm6',
-          label: 'Today Polls',
+          label: 'Polls',
           value: activePolls.length.toLocaleString(),
           icon: 'how-to-vote',
           color: colors.accent,
@@ -448,7 +464,7 @@ export const DashboardScreen = (): React.ReactElement => {
         },
         {
           id: 'm7',
-          label: 'Today Fake News',
+          label: 'Fake News',
           value: fakeNewsToday.length.toLocaleString(),
           icon: 'report-problem',
           color: colors.warning,
@@ -505,9 +521,9 @@ export const DashboardScreen = (): React.ReactElement => {
           alignItems: 'center',
         },
         assemblySelectorWrapper: {
-          flex: 1,
+          flex: 0.65,
           minWidth: 0,
-          height: 48,
+          height: 56,
         },
         filterHint: {
           marginTop: 10,
@@ -518,16 +534,16 @@ export const DashboardScreen = (): React.ReactElement => {
           letterSpacing: -0.1,
         },
         myAssemblyButtonCompact: {
-          flex: 1,
+          flex: 0.35,
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'center',
-          gap: 8,
-          height: 46,
-          minHeight: 46,
-          paddingVertical: 12,
-          paddingHorizontal: 16,
-          borderRadius: 12,
+          gap: 6,
+          height: 36,
+          minHeight: 36,
+          paddingVertical: 8,
+          paddingHorizontal: 12,
+          borderRadius: 10,
           borderWidth: 1,
           borderColor: colors.border,
           backgroundColor: colors.card,
@@ -549,6 +565,7 @@ export const DashboardScreen = (): React.ReactElement => {
         sectionTitleContainer: {
           flexDirection: 'row',
           alignItems: 'center',
+          justifyContent: 'space-between',
           gap: 8,
           marginBottom: 16,
           flexWrap: 'wrap',
@@ -571,7 +588,7 @@ export const DashboardScreen = (): React.ReactElement => {
           borderWidth: 1.5,
         },
         myAssemblyButtonText: {
-          fontSize: 14,
+          fontSize: 12,
           fontWeight: '700',
           color: colors.textSecondary,
           letterSpacing: -0.1,
@@ -581,6 +598,31 @@ export const DashboardScreen = (): React.ReactElement => {
           fontWeight: '800',
           letterSpacing: -0.1,
         },
+        suggestionToggleContainer: {
+          flexDirection: 'row',
+          gap: 6,
+        },
+        suggestionToggleButton: {
+          paddingVertical: 6,
+          paddingHorizontal: 12,
+          borderRadius: 8,
+          backgroundColor: colors.surface,
+          borderWidth: 1.5,
+          borderColor: colors.border,
+        },
+        suggestionToggleButtonActive: {
+          backgroundColor: `${colors.primary}15`,
+          borderColor: colors.primary,
+        },
+        suggestionToggleText: {
+          fontSize: 12,
+          fontWeight: '600',
+          color: colors.textSecondary,
+        },
+        suggestionToggleTextActive: {
+          color: colors.primary,
+          fontWeight: '700',
+        },
         assemblyMoodFilterHint: {
           marginTop: 6,
           marginBottom: 14,
@@ -589,6 +631,12 @@ export const DashboardScreen = (): React.ReactElement => {
           fontStyle: 'italic',
           fontWeight: '600',
           letterSpacing: -0.1,
+        },
+        assemblyNameBold: {
+          fontWeight: '800',
+          color: colors.textPrimary,
+          fontStyle: 'normal',
+          fontSize: 14,
         },
         metricsGrid: {
           flexDirection: 'row',
@@ -686,8 +734,8 @@ export const DashboardScreen = (): React.ReactElement => {
           lineHeight: 18,
         },
         suggestionMeta: {
-          flexDirection: 'row',
-          alignItems: 'center',
+          flexDirection: 'column',
+          alignItems: 'flex-start',
           marginTop: 4,
           gap: 4,
         },
@@ -723,33 +771,76 @@ export const DashboardScreen = (): React.ReactElement => {
           fontWeight: '700',
           letterSpacing: -0.1,
         },
+        suggestionModalBackdrop: {
+          flex: 1,
+          backgroundColor: '#00000066',
+          justifyContent: 'center',
+          alignItems: 'center',
+          paddingHorizontal: 20,
+        },
+        suggestionModal: {
+          width: '100%',
+          maxHeight: '80%',
+          backgroundColor: colors.card,
+          borderRadius: 16,
+          paddingHorizontal: 20,
+          paddingTop: 18,
+          paddingBottom: 20,
+          shadowColor: '#000',
+          shadowOpacity: 0.25,
+          shadowRadius: 12,
+          shadowOffset: { width: 0, height: 4 },
+          elevation: 6,
+        },
+        suggestionModalHeader: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: 12,
+        },
+        suggestionModalTitle: {
+          flex: 1,
+          fontSize: 18,
+          fontWeight: '800',
+          color: colors.textPrimary,
+          marginRight: 12,
+        },
+        suggestionModalClose: {
+          padding: 4,
+          borderRadius: 16,
+          backgroundColor: colors.background,
+        },
+        suggestionModalBody: {
+          fontSize: 14,
+          lineHeight: 20,
+          color: colors.textPrimary,
+        },
       }),
     [colors],
   );
 
-  // Get top 3 suggestions sorted by likes - from all segments for all roles
+  // Get top 3 suggestions sorted by likes from LocalSuggestionsContext
   const topSuggestions = useMemo(() => {
-    // Show suggestions from all segments for all roles
-    const suggestions = mockFeed
-      .filter(item => {
-        if (item.type !== 'SUGGESTION') return false;
-        return true; // No filtering - show suggestions from all segments
-      })
-      .map(item => ({
-        id: item.id,
-        title: item.title,
-        description: 'description' in item ? item.description : undefined,
-        authorName: item.authorName || 'Unknown',
-        assemblySegment: item.areaScope?.assemblySegment,
-        likes: item.likes ?? 0,
-        dislikes: item.dislikes ?? 0,
-        postedAt: item.postedAt,
-      }))
-      .sort((a, b) => b.likes - a.likes)
-      .slice(0, 3);
+    // Always sort by likes from local suggestions; ignore assembly for now since
+    // LocalSuggestionsContext stores global strategic suggestions
+    const sorted = [...localSuggestions].sort((a, b) => b.likes - a.likes).slice(0, 3);
 
-    return suggestions;
-  }, []) as SuggestionItem[]; // No dependencies - always shows all suggestions
+    return sorted.map<SuggestionItem>((item) => ({
+      id: item.id,
+      title: item.title,
+      description: item.summary,
+      // Use a generic author label since LocalSuggestions don't track author names
+      authorName: 'Top Cadre Strategy',
+      assemblySegment:
+        showMyAssemblyOnlySuggestions && user?.assignedAreas?.assemblySegment
+          ? user.assignedAreas.assemblySegment
+          : undefined,
+      likes: item.likes,
+      // Local suggestions don't track dislikes; keep as 0 for now
+      dislikes: 0,
+      postedAt: '',
+    }));
+  }, [localSuggestions, showMyAssemblyOnlySuggestions, user?.assignedAreas?.assemblySegment]) as SuggestionItem[];
 
   // Helper function to get user points by name or aliasName
   const getUserPoints = (nameOrAlias: string): number | null => {
@@ -816,7 +907,7 @@ export const DashboardScreen = (): React.ReactElement => {
               >
                 <MaterialIcons
                   name={showMyAssemblyOnly ? 'location-on' : 'location-off'}
-                  size={20}
+                  size={16}
                   color={
                     showMyAssemblyOnly ? colors.primary : colors.textSecondary
                   }
@@ -855,7 +946,7 @@ export const DashboardScreen = (): React.ReactElement => {
       {isSuperAdmin && (
         <View style={styles.section}>
           <View style={styles.sectionTitleContainer}>
-            <Text style={styles.sectionTitle}>📊 Key Metrics</Text>
+            <Text style={styles.sectionTitle}>📊 Today Key Metrics</Text>
             <TouchableOpacity
               onPress={() => {
                 const userRole = isSuperAdmin
@@ -901,7 +992,13 @@ export const DashboardScreen = (): React.ReactElement => {
                   />
                 </View>
                 <Text style={styles.metricValue}>{metric.value}</Text>
-                <Text style={styles.metricLabel}>{metric.label}</Text>
+                <Text
+                  style={styles.metricLabel}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                >
+                  {metric.label}
+                </Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -910,19 +1007,74 @@ export const DashboardScreen = (): React.ReactElement => {
 
       {/* Assembly Mood Section */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>📊 Assembly Mood</Text>
+        <View style={styles.sectionTitleContainer}>
+          <Text style={styles.sectionTitle}>📊 Assembly Mood</Text>
+          <TouchableOpacity
+            onPress={() => {
+              // Determine which assembly to show details for
+              const assemblyToShow = isSuperAdmin
+                ? selectedAssembly || user?.assignedAreas?.assemblySegment
+                : user?.assignedAreas?.assemblySegment;
+              
+              if (assemblyToShow) {
+                // Remove any suffixes like (ST), (SC) for matching
+                const cleanAssemblyName = assemblyToShow.replace(/\s*\([^)]*\)\s*$/, '');
+                // Determine the role-based screen name
+                const userRole = isSuperAdmin
+                  ? 'superAdmin'
+                  : isLocalAdmin
+                  ? 'localAdmin'
+                  : 'member';
+                const screenName = `${userRole}-AssemblyDetails`;
+                navigation.navigate(screenName as any, {
+                  assemblyName: cleanAssemblyName,
+                });
+              }
+            }}
+            activeOpacity={0.7}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 6,
+              paddingVertical: 6,
+              paddingHorizontal: 12,
+              borderRadius: 8,
+              backgroundColor: `${colors.primary}15`,
+              borderWidth: 1,
+              borderColor: colors.primary,
+            }}
+          >
+            <MaterialIcons name="info" size={16} color={colors.primary} />
+            <Text
+              style={{
+                fontSize: 13,
+                fontWeight: '700',
+                color: colors.primary,
+                letterSpacing: -0.1,
+              }}
+            >
+              Info
+            </Text>
+          </TouchableOpacity>
+        </View>
 
         {/* Show current filter status */}
         {!isSuperAdmin && user?.assignedAreas?.assemblySegment && (
           <Text style={styles.assemblyMoodFilterHint}>
-            Showing data for: {user.assignedAreas.assemblySegment}
+            Showing data for:{' '}
+            <Text style={styles.assemblyNameBold}>
+              {user.assignedAreas.assemblySegment}
+            </Text>
           </Text>
         )}
         {isSuperAdmin &&
           showMyAssemblyOnly &&
           user?.assignedAreas?.assemblySegment && (
             <Text style={styles.assemblyMoodFilterHint}>
-              Showing data for: {user.assignedAreas.assemblySegment}
+              Showing data for:{' '}
+              <Text style={styles.assemblyNameBold}>
+                {user.assignedAreas.assemblySegment}
+              </Text>
             </Text>
           )}
         {isSuperAdmin && !showMyAssemblyOnly && !selectedAssembly && (
@@ -932,7 +1084,10 @@ export const DashboardScreen = (): React.ReactElement => {
         )}
         {isSuperAdmin && selectedAssembly && (
           <Text style={styles.assemblyMoodFilterHint}>
-            Showing data for: {selectedAssembly}
+            Showing data for:{' '}
+            <Text style={styles.assemblyNameBold}>
+              {selectedAssembly}
+            </Text>
           </Text>
         )}
 
@@ -952,17 +1107,93 @@ export const DashboardScreen = (): React.ReactElement => {
 
       {/* Top 3 Suggestions */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>💡 Top Suggestions</Text>
+        <View style={styles.sectionTitleContainer}>
+          <Text style={styles.sectionTitle}>💡 Top Suggestions</Text>
+          {user?.assignedAreas?.assemblySegment && (
+            <View style={styles.suggestionToggleContainer}>
+              <TouchableOpacity
+                style={[
+                  styles.suggestionToggleButton,
+                  !showMyAssemblyOnlySuggestions && styles.suggestionToggleButtonActive,
+                ]}
+                onPress={() => setShowMyAssemblyOnlySuggestions(false)}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[
+                    styles.suggestionToggleText,
+                    !showMyAssemblyOnlySuggestions && styles.suggestionToggleTextActive,
+                  ]}
+                >
+                  All
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.suggestionToggleButton,
+                  showMyAssemblyOnlySuggestions && styles.suggestionToggleButtonActive,
+                ]}
+                onPress={() => setShowMyAssemblyOnlySuggestions(true)}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[
+                    styles.suggestionToggleText,
+                    showMyAssemblyOnlySuggestions && styles.suggestionToggleTextActive,
+                  ]}
+                >
+                  My Assembly
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
         {topSuggestions.length > 0 ? (
-          topSuggestions.map((suggestion, index) => (
-            <TouchableOpacity
-              key={suggestion.id}
-              style={styles.suggestionCard}
-              activeOpacity={0.7}
-            >
+          topSuggestions.map((suggestion, index) => {
+            // Color grading for #1, #2, #3
+            let rankBackground = colors.primary;
+            let rankBorder = `${colors.primaryLight}80`;
+            let rankTextColor = colors.textPrimary;
+
+            if (index === 0) {
+              // #1 - Gold
+              rankBackground = '#FFD700';
+              rankBorder = '#E6C200';
+              rankTextColor = '#7A5300';
+            } else if (index === 1) {
+              // #2 - Silver
+              rankBackground = '#C0C0C0';
+              rankBorder = '#A0A0A0';
+              rankTextColor = '#333333';
+            } else if (index === 2) {
+              // #3 - Bronze
+              rankBackground = '#CD7F32';
+              rankBorder = '#B56922';
+              rankTextColor = '#FFFFFF';
+            }
+
+            return (
+              <TouchableOpacity
+                key={suggestion.id}
+                style={styles.suggestionCard}
+                activeOpacity={0.8}
+                onPress={() => setSelectedSuggestion(suggestion)}
+              >
               <View style={styles.suggestionHeader}>
-                <View style={styles.suggestionRank}>
-                  <Text style={styles.suggestionRankText}>#{index + 1}</Text>
+                <View
+                  style={[
+                    styles.suggestionRank,
+                    { backgroundColor: rankBackground, borderColor: rankBorder },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.suggestionRankText,
+                      { color: rankTextColor },
+                    ]}
+                  >
+                    #{index + 1}
+                  </Text>
                 </View>
                 <View style={styles.suggestionContent}>
                   <Text style={styles.suggestionTitle} numberOfLines={2}>
@@ -1020,9 +1251,11 @@ export const DashboardScreen = (): React.ReactElement => {
                       })()}
                     </View>
                     {suggestion.assemblySegment && (
-                      <Text style={styles.suggestionSegment}>
-                        • {suggestion.assemblySegment}
-                      </Text>
+                      <View style={{ marginTop: 4 }}>
+                        <Text style={styles.suggestionSegment}>
+                          {suggestion.assemblySegment}
+                        </Text>
+                      </View>
                     )}
                   </View>
                 </View>
@@ -1050,7 +1283,8 @@ export const DashboardScreen = (): React.ReactElement => {
                 </View>
               </View>
             </TouchableOpacity>
-          ))
+            );
+          })
         ) : (
           <View
             style={{
@@ -1071,6 +1305,42 @@ export const DashboardScreen = (): React.ReactElement => {
           </View>
         )}
       </View>
+
+      {/* Top suggestion full details modal */}
+      {selectedSuggestion && (
+        <Modal
+          visible={!!selectedSuggestion}
+          transparent
+          animationType={Platform.OS === 'ios' ? 'slide' : 'fade'}
+          onRequestClose={() => setSelectedSuggestion(null)}
+        >
+          <View style={styles.suggestionModalBackdrop}>
+            <View style={styles.suggestionModal}>
+              <View style={styles.suggestionModalHeader}>
+                <Text style={styles.suggestionModalTitle}>
+                  {selectedSuggestion.title}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setSelectedSuggestion(null)}
+                  style={styles.suggestionModalClose}
+                  hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
+                >
+                  <MaterialIcons
+                    name="close"
+                    size={22}
+                    color={colors.textPrimary}
+                  />
+                </TouchableOpacity>
+              </View>
+              {selectedSuggestion.description ? (
+                <Text style={styles.suggestionModalBody}>
+                  {selectedSuggestion.description}
+                </Text>
+              ) : null}
+            </View>
+          </View>
+        </Modal>
+      )}
     </ScrollView>
   );
 };

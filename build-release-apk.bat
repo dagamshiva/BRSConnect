@@ -1,6 +1,6 @@
 @echo off
 echo ========================================
-echo Building BRSConnect APK for Android
+echo Building BRSConnect Release APK
 echo ========================================
 echo.
 
@@ -14,8 +14,8 @@ if %errorlevel% neq 0 (
 )
 
 echo.
-echo Step 2: Building Debug APK...
-call gradlew assembleDebug
+echo Step 2: Building Release APK...
+call gradlew assembleRelease
 if %errorlevel% neq 0 (
     echo Error: Build failed!
     pause
@@ -29,24 +29,11 @@ echo Build completed successfully!
 echo ========================================
 echo.
 echo APK Location:
-echo android\app\build\outputs\apk\debug\app-debug.apk
+echo android\app\build\outputs\apk\release\app-release.apk
 echo.
-echo You can now transfer this APK to your Android device and install it.
+echo NOTE: This APK is signed with the debug keystore.
+echo For production releases, you should use your own release keystore.
+echo See: https://reactnative.dev/docs/signed-apk-android
 echo.
 pause
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 

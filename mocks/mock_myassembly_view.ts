@@ -86,6 +86,61 @@ const partyPreferenceViews: AssemblyView[] = [
     bjp: '1',
     others: '1',
   },
+  {
+    id: 'apv-6',
+    type: 'PARTY_PREFERENCE',
+    assemblySegment: 'Chennur',
+    postedBy: '54902a58-5a38-488c-b81b-90ec97c5b845',
+    postedAt: '2025-01-15T12:00:00.000Z',
+    brs: '12',
+    congress: '5',
+    bjp: '3',
+    others: '2',
+  },
+  {
+    id: 'apv-7',
+    type: 'PARTY_PREFERENCE',
+    assemblySegment: 'Ramagundam',
+    postedBy: 'd74589b7-d9eb-41b9-bb96-2f631bf4a360',
+    postedAt: '2025-01-15T11:45:00.000Z',
+    brs: '15',
+    congress: '4',
+    bjp: '2',
+    others: '1',
+  },
+  {
+    id: 'apv-8',
+    type: 'PARTY_PREFERENCE',
+    assemblySegment: 'Siddipet',
+    postedBy: '40b5bc7b-aa2b-4314-88e6-9ad936c5367c',
+    postedAt: '2025-01-15T12:15:00.000Z',
+    brs: '18',
+    congress: '6',
+    bjp: '4',
+    others: '2',
+  },
+  {
+    id: 'apv-9',
+    type: 'PARTY_PREFERENCE',
+    assemblySegment: 'Bellampalli',
+    postedBy: 'c0d4e5f6-a7b8-9012-cdef-345678901234',
+    postedAt: '2025-01-15T11:15:00.000Z',
+    brs: '10',
+    congress: '7',
+    bjp: '3',
+    others: '2',
+  },
+  {
+    id: 'apv-10',
+    type: 'PARTY_PREFERENCE',
+    assemblySegment: 'Gajwel',
+    postedBy: '40b5bc7b-aa2b-4314-88e6-9ad936c5367c',
+    postedAt: '2025-01-15T12:45:00.000Z',
+    brs: '20',
+    congress: '6',
+    bjp: '2',
+    others: '1',
+  },
 ];
 
 // Mock data - BRS Satisfaction views (aggregated by assembly segment)
@@ -135,6 +190,51 @@ const brsSatisfactionViews: AssemblyView[] = [
     happy: '4',
     unhappy: '3',
   },
+  {
+    id: 'bsv-6',
+    type: 'BRS_SATISFACTION',
+    assemblySegment: 'Chennur',
+    postedBy: '54902a58-5a38-488c-b81b-90ec97c5b845',
+    postedAt: '2025-01-15T14:00:00.000Z',
+    happy: '15',
+    unhappy: '5',
+  },
+  {
+    id: 'bsv-7',
+    type: 'BRS_SATISFACTION',
+    assemblySegment: 'Ramagundam',
+    postedBy: 'd74589b7-d9eb-41b9-bb96-2f631bf4a360',
+    postedAt: '2025-01-15T14:15:00.000Z',
+    happy: '18',
+    unhappy: '4',
+  },
+  {
+    id: 'bsv-8',
+    type: 'BRS_SATISFACTION',
+    assemblySegment: 'Siddipet',
+    postedBy: '40b5bc7b-aa2b-4314-88e6-9ad936c5367c',
+    postedAt: '2025-01-15T14:30:00.000Z',
+    happy: '22',
+    unhappy: '6',
+  },
+  {
+    id: 'bsv-9',
+    type: 'BRS_SATISFACTION',
+    assemblySegment: 'Bellampalli',
+    postedBy: 'c0d4e5f6-a7b8-9012-cdef-345678901234',
+    postedAt: '2025-01-15T13:45:00.000Z',
+    happy: '12',
+    unhappy: '8',
+  },
+  {
+    id: 'bsv-10',
+    type: 'BRS_SATISFACTION',
+    assemblySegment: 'Gajwel',
+    postedBy: '40b5bc7b-aa2b-4314-88e6-9ad936c5367c',
+    postedAt: '2025-01-15T15:00:00.000Z',
+    happy: '24',
+    unhappy: '4',
+  },
 ];
 
 // Combine all views
@@ -169,9 +269,13 @@ export const getPartyDistribution = (
   assemblySegment?: string | null,
 ): { party: string; count: number; percentage: number }[] => {
   // Filter users by assembly segment if specified
-  let users = telanganaUsers.filter((u: any) => u.isActive && u.status === 'Approved');
+  let users = telanganaUsers.filter(
+    (u: any) => u.isActive && u.status === 'Approved',
+  );
   if (assemblySegment) {
-    users = users.filter((u: any) => u.assignedAreas?.assemblySegment === assemblySegment);
+    users = users.filter(
+      (u: any) => u.assignedAreas?.assemblySegment === assemblySegment,
+    );
   }
 
   // Count votes from user voting preferences
@@ -241,9 +345,13 @@ export const getBRSSatisfactionPercentage = (
   assemblySegment?: string | null,
 ): number => {
   // Filter users by assembly segment if specified
-  let users = telanganaUsers.filter((u: any) => u.isActive && u.status === 'Approved');
+  let users = telanganaUsers.filter(
+    (u: any) => u.isActive && u.status === 'Approved',
+  );
   if (assemblySegment) {
-    users = users.filter((u: any) => u.assignedAreas?.assemblySegment === assemblySegment);
+    users = users.filter(
+      (u: any) => u.assignedAreas?.assemblySegment === assemblySegment,
+    );
   }
 
   // Count votes from user voting preferences

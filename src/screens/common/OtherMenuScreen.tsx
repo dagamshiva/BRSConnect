@@ -33,6 +33,38 @@ export const OtherMenuScreen = (): React.ReactElement => {
 
   const getMenuItems = (): OtherMenuItem[] => {
     const items: OtherMenuItem[] = [
+      // Polls - available to all users
+      {
+        id: 'polls',
+        title: 'Polls',
+        icon: 'how-to-vote',
+        route: 'Polls',
+        color: colors.primary,
+      },
+      // Fake News - moved from bottom tab into Other menu
+      {
+        id: 'fake-news',
+        title: 'Fake News',
+        icon: 'report-problem',
+        route: 'FakeNews',
+        color: colors.danger,
+      },
+      // Cadre Directory - available to all users
+      {
+        id: 'cadre-directory',
+        title: 'Cadre Directory',
+        icon: 'people',
+        route: 'CadreDirectory',
+        color: colors.info,
+      },
+      // Reports Dashboard - available to all users
+      {
+        id: 'reports-dashboard',
+        title: 'Reports & Dashboard',
+        icon: 'assessment',
+        route: 'ReportsDashboard',
+        color: colors.success,
+      },
       // Bookmarks - available to all users
       {
         id: 'bookmarks',
@@ -146,6 +178,9 @@ export const OtherMenuScreen = (): React.ReactElement => {
       ShowUserDetails: 'ShowUserDetails',
       PostAssemblyView: 'PostAssemblyView',
       Bookmarks: 'Bookmarks',
+      Polls: 'Polls',
+      CadreDirectory: 'CadreDirectory',
+      ReportsDashboard: 'ReportsDashboard',
     };
 
     const routeName = routeMap[route] || route;

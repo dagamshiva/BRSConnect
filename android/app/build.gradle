@@ -108,6 +108,36 @@ android {
     }
 }
 
+// Task to remove duplicate jpg assets before merge
+android.applicationVariants.all { variant ->
+    if (variant.buildType.name == "release") {
+        def mergeResourcesTask = variant.mergeResourcesProvider.get()
+        def createBundleTask = tasks.findByName("createBundleReleaseJsAndAssets")
+        
+        def cleanupDuplicateAssets = tasks.register("cleanupDuplicateAssets${variant.name.capitalize()}") {
+            doLast {
+                def generatedResDir = file("${buildDir}/generated/res/react/release")
+                if (generatedResDir.exists()) {
+                    generatedResDir.eachDirRecurse { dir ->
+                        if (dir.name.startsWith('drawable-')) {
+                            def jpgFile = new File(dir, 'src_assets_brslogo.jpg')
+                            if (jpgFile.exists()) {
+                                jpgFile.delete()
+                                println "Deleted duplicate jpg asset: ${jpgFile.path}"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        if (createBundleTask != null) {
+            cleanupDuplicateAssets.configure { dependsOn createBundleTask }
+        }
+        mergeResourcesTask.dependsOn(cleanupDuplicateAssets)
+    }
+}
+
 dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")

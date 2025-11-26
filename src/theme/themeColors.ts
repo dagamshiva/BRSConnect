@@ -3,8 +3,10 @@ export const darkTheme = {
   background: "#121212",
   surface: "#1E1E1E",
   card: "#2A2A2A",
-  primary: "#E80089",
-  primaryLight: "#FF5C8D",
+  // Softer pink for primary actions; was #E80089 (very bright)
+  primary: "#FF5C8D",
+  // Even lighter tint for subtle backgrounds/chips
+  primaryLight: "#FF9AC2",
   primaryDark: "#B0003A",
   accent: "#FFC107",
   textPrimary: "#FFFFFF",
@@ -22,8 +24,10 @@ export const whiteTheme = {
   background: "#FAFAFA",
   surface: "#FFFFFF",
   card: "#FFFFFF",
-  primary: "#E80089",
-  primaryLight: "#FF5C8D",
+  // Softer pink for primary actions; was #E80089 (very bright)
+  primary: "#FF5C8D",
+  // Even lighter tint for subtle backgrounds/chips
+  primaryLight: "#FF9AC2",
   primaryDark: "#B0003A",
   accent: "#FFC107",
   textPrimary: "#0F172A",
